@@ -1,6 +1,5 @@
 import network
 import time
-from logic import *
 sta = network.WLAN(network.STA_IF) #station
 sta.active(True)
 
@@ -14,13 +13,7 @@ for _ in range(20):
     time.sleep(0.5)
 if sta.isconnected:
     print(f"pripojeno | IP:  {sta.ifconfig()[0]}")
-    for a in range(10):
-        for b in range(10):
-            display.set_pixel(a,b,"green")
 else:
     print("nefunguje :(((((")
-    for a in range(10):
-        for b in range(10):
-            display.set_pixel(a,b,"red")
 
 
