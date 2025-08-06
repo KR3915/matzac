@@ -3,24 +3,58 @@ import time
 import socket
 import ujson
 
-sta = network.WLAN(network.STA_IF) #station
-sta.active(True)
+# --- Konfigurace ---
+WIFI_SSID = "ESP-AP"
+WIFI_PASS = "protabulesa"
+SERVER_PORT = 1234
+WIFI_CONNECT_TIMEOUT_S = 10  # 10 sekund na připojení k Wi-Fi
+SOCKET_TIMEOUT_S = 5         # 5 sekund timeout pro síťové operace
 
-#pripojit k ESP
-sta.connect("ESP-AP", "protabulesa")
+def connect_to_wifi(ssid, password, timeout_s):
+    """Pokusí se připojit k Wi-Fi síti."""
+    sta = network.WLAN(network.STA_IF)
+    sta.active(True)
 
-for _ in range(20):
-    if sta.isconnected():
-        break
-    print("čekání na připojení...")
-    time.sleep(0.5)
+    print(f"Připojování k síti '{ssid}'...")
+    sta.connect(ssid, password)
 
-if sta.isconnected():
-    # Gateway je IP adresa Access Pointu (serveru)
-    server_ip = sta.ifconfig()[2]
-    server_port = 1234
+    start_time = time.time()
+    while not sta.isconnected():
+        if time.time() - start_time > timeout_s:
+            print("Připojení k Wi-Fi selhalo (timeout).")
+            return None
+        time.sleep(0.5)
+        print("...")
+
     print(f"Připojeno k Wi-Fi | IP: {sta.ifconfig()[0]}")
-    print(f"Pokouším se připojit k serveru na {server_ip}:{server_port}...")
+    return sta
+
+def communication_loop(sock):
+    """Hlavní smyčka pro obousměrnou komunikaci se serverem."""
+    # --- Proměnné na straně klienta, které se budou odesílat ---
+    client_input = {
+        "button_pressed": None,
+        "joystick_x": 0,
+        "joystick_y": 0,
+    }
+
+    # --- Proměnné, které se budou aktualizovat daty ze serveru ---
+    # Inicializace s výchozími hodnotami pro případ, že by data nepřišla
+    server_state = {
+        "list_pp": [],
+        "mat_pp": [],
+        "toup_pp": {},
+        "host_message": ""
+    }
+
+    while True:
+        # 1. PŘÍJEM DAT ZE SERVERU
+        try:
+            # Čeká na kompletní řádek (ukončený '\n'), ale s timeoutem
+            line = sock.readline()
+            if not line:
+                print("Server ukončil spojení.")
+                break
 
     s = None
     try:
@@ -40,6 +74,7 @@ if sta.isconnected():
         list_pp = []
         mat_pp = []
         toup_pp = {}
+        host_message = ""
 
         # Hlavní komunikační smyčka
         while True:
@@ -60,9 +95,10 @@ if sta.isconnected():
                 list_pp = server_data.get('list_pp', [])
                 mat_pp = server_data.get('mat_pp', [])
                 toup_pp = server_data.get('toup_pp', {})
+                host_message = server_data.get('host_message', '')
 
-                # Pro ukázku vypíšeme část přijatých dat
-                print(f"Přijato: {toup_pp}")
+                # Vypíše zprávu přijatou od hosta do konzole.
+                print(f"Zpráva od hosta: {host_message}")
 
             except (ValueError, KeyError) as e:
                 print(f"Chyba při zpracování JSON od serveru: {e}")
