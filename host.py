@@ -3,6 +3,7 @@ import socket
 import ujson
 import time
 import random
+from logic import *
 # --- Konfigurace Wi-Fi ---
 WIFI_SSID = "ESP-AP"
 WIFI_PASS = "protabulesa"
