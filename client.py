@@ -3,7 +3,6 @@ import socket
 import ujson
 import time
 import random
-from logic import *
 # --- Konfigurace Wi-Fi ---
 WIFI_SSID = "ESP-AP"
 WIFI_PASS = "protabulesa"
@@ -63,8 +62,8 @@ try:
                 break
             host_state = ujson.loads(line)
             # Zde načti proměnné od hostitele
-            hrac2_X = host_state.get('hrac_X', 5)
-            hrac2_Y = host_state.get('hrac_Y', 0)
+            hrac2_X = host_state.get('hrac2_X', 5)
+            hrac2_Y = host_state.get('hrac2_Y', 0)
             # ... další proměnné ...
         except Exception as e:
             print(f"Chyba při čtení od hostitele: {e}")
@@ -100,7 +99,7 @@ try:
             for strela_Y in range(10):
                 display.set_pixel(strela_X, 9-strela_Y, "red")
                 display.set_pixel(hrac_X, hrac_Y, "green")
-                time.sleep_ms(100)
+                time.sleep_ms(100)   
                 if buttons_a.left and hrac_X > 0:
                     hrac_do_leva()
                 if buttons_a.right and hrac_X < 9:
@@ -126,7 +125,7 @@ try:
             for strela_Y in range(10):
                 display.set_pixel(strela_X, 9-strela_Y, "red")
                 display.set_pixel(hrac_X, hrac_Y, "green")
-                time.sleep_ms(100)
+                time.sleep_ms(100)   
                 if buttons_a.left and hrac_X > 0:
                     hrac_do_leva()
                 if buttons_a.right and hrac_X < 9:
@@ -136,7 +135,7 @@ try:
             for strela_Y in range(10):
                 display.set_pixel(strela_X, 9-strela_Y, "black")
                 display.set_pixel(hrac_X, hrac_Y, "green")
-                time.sleep_ms(100)
+                time.sleep_ms(100)   
                 if buttons_a.left and hrac_X > 0:
                     hrac_do_leva()
                 if buttons_a.right and hrac_X < 9:
@@ -171,8 +170,8 @@ try:
                 if buttons_a.left and hrac_X > 0:
                     hrac_do_leva()
                 if buttons_a.right and hrac_X < 9:
-                    hrac_do_prava()
-                display.set_pixel(x, y, "black")
+                    hrac_do_prava() 
+                display.set_pixel(x, y, "black")       
             if enemak_X == hrac_X and y == 9 :
                 c = 9
                 d = 0
