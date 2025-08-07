@@ -30,6 +30,53 @@ def connect_to_wifi(ssid, password, timeout_s):
     print(f"Připojeno k Wi-Fi | IP: {sta.ifconfig()[0]}")
     return sta
 
+# --- Herní pole 10x20, dvouhráčový režim ---
+WIDTH = 10
+HEIGHT = 20
+
+# Hráč 1 (server, spodní polovina y=0–9), Hráč 2 (klient, horní polovina y=10–19)
+hraci = [
+    {"x": 5, "y": 1, "hp": 3, "max_hp": 3, "controller": "a", "buff": None, "stit": False, "klon": False, "klon_counter": 0},
+    {"x": 5, "y": HEIGHT-2, "hp": 3, "max_hp": 3, "controller": "b", "buff": None, "stit": False, "klon": False, "klon_counter": 0}
+]
+
+strely = []  # Každá střela: {x, y, dx, dy, typ, hrac}
+buffy_na_poli = []  # Každý buff: {x, y, typ, stav, barva}
+
+# --- Síťová synchronizace (pseudokód, nutno doplnit podle platformy) ---
+def posli_stav_klientovi(stav):
+    # serializace a odeslání stavu klientovi
+    pass
+
+def prijmi_vstupy_klienta():
+    # příjem vstupů klienta (pohyb, střelba, aktivace buffu)
+    return {}
+
+# --- Vykreslení poloviny pole ---
+def vykresli_pole(hrac_idx):
+    y_start = 0 if hrac_idx == 0 else 10
+    for x in range(WIDTH):
+        for y in range(y_start, y_start+10):
+            display.set_pixel(x, y-y_start, "black")
+    # Hráči
+    for idx, h in enumerate(hraci):
+        if y_start <= h["y"] < y_start+10:
+            color = "green" if idx == hrac_idx else "yellow"
+            display.set_pixel(h["x"], h["y"]-y_start, color)
+    # Střely
+    for s in strely:
+        if y_start <= s["y"] < y_start+10:
+            color = "red" if s["hrac"] == hrac_idx else "orange"
+            display.set_pixel(s["x"], s["y"]-y_start, color)
+    # Buffy
+    for b in buffy_na_poli:
+        if y_start <= b["y"] < y_start+10:
+            display.set_pixel(b["x"], b["y"]-y_start, b["barva"])
+    # HP bar
+    for i in range(hraci[hrac_idx]["max_hp"]):
+        color = "red" if i < hraci[hrac_idx]["hp"] else "black"
+        display.set_pixel(i, 9, color)
+
 # --- Herní stav ---
 hrac_X = 5
 hrac_Y = 9
@@ -282,28 +329,129 @@ def prohra():
         hrac_X = 5
         vykresli_hp_bar()
 
-# --- Hlavní smyčka hry ---
+# --- Zpracování vstupů a logiky pro oba hráče ---
+def zpracuj_vstupy(hrac_idx, vstupy):
+    h = hraci[hrac_idx]
+    # Pohyb
+    if vstupy.get('left'):
+        h['x'] = max(0, h['x'] - 1)
+    if vstupy.get('right'):
+        h['x'] = min(WIDTH-1, h['x'] + 1)
+    # Střelba
+    if vstupy.get('down'):
+        nova_strela = {"x": h['x'], "y": h['y'] - 1 if hrac_idx == 0 else h['y'] + 1, "dx": 0, "dy": -1 if hrac_idx == 0 else 1, "typ": "player", "hrac": hrac_idx}
+        strely.append(nova_strela)
+        # Klon střílí každou druhou střelu
+        if h['klon']:
+            h['klon_counter'] += 1
+            if h['klon_counter'] % 2 == 0:
+                klon_x = min(WIDTH-1, max(0, h['x'] + 2))
+                nova_klon = {"x": klon_x, "y": nova_strela['y'], "dx": 0, "dy": nova_strela['dy'], "typ": "player", "hrac": hrac_idx}
+                strely.append(nova_klon)
+    # Aktivace buffu
+    if vstupy.get('enter') and h['buff']:
+        aktivuj_buff_dual(hrac_idx)
+
+# --- Aktivace buffu pro dvouhráčový režim ---
+def aktivuj_buff_dual(hrac_idx):
+    h = hraci[hrac_idx]
+    if h['buff'] == 'velka_strela':
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                x = h['x'] + dx
+                y = h['y'] - 1 + dy if hrac_idx == 0 else h['y'] + 1 + dy
+                if 0 <= x < WIDTH and 0 <= y < HEIGHT:
+                    strely.append({"x": x, "y": y, "dx": 0, "dy": -1 if hrac_idx == 0 else 1, "typ": "player", "hrac": hrac_idx})
+        h['buff'] = None
+    elif h['buff'] == 'stit':
+        h['stit'] = True
+        h['buff_timer'] = time.ticks_ms()
+        h['buff'] = None
+    elif h['buff'] == 'klon':
+        h['klon'] = True
+        h['klon_counter'] = 0
+        h['buff_timer'] = time.ticks_ms()
+        h['buff'] = None
+
+# --- Update střel, kolizí a buffů pro oba hráče ---
+def update_strely_dual():
+    global strely
+    nove_strely = []
+    for strela in strely:
+        # Smazat starou pozici (vykreslení řeší vykresli_pole)
+        strela['x'] += strela.get('dx', 0)
+        strela['y'] += strela.get('dy', 0)
+        # Kontrola, zda je střela stále na herním poli
+        if 0 <= strela['x'] < WIDTH and 0 <= strela['y'] < HEIGHT:
+            # Kolize s druhým hráčem
+            druhy = 1 - strela['hrac']
+            h2 = hraci[druhy]
+            if strela['x'] == h2['x'] and strela['y'] == h2['y']:
+                if not h2['stit']:
+                    h2['hp'] -= 1
+                continue
+            # Vykreslení střely podle typu řeší vykresli_pole
+            nove_strely.append(strela)
+    strely = nove_strely
+
+# --- Update buffů na ploše pro oba hráče ---
+def update_buffy_na_poli_dual():
+    global buffy_na_poli
+    nove_buffy = []
+    for buff in buffy_na_poli:
+        if buff['stav'] == 'modry':
+            buff['y'] += 1 if buff['y'] < HEIGHT//2 else -1
+        if not (0 <= buff['y'] < HEIGHT):
+            continue
+        nove_buffy.append(buff)
+    buffy_na_poli = nove_buffy
+
+# --- Sebrání buffu hráčem ze strany pro oba hráče ---
+def kontrola_sebrani_buffu_dual():
+    global buffy_na_poli
+    nove_buffy = []
+    for buff in buffy_na_poli:
+        if buff['stav'] == 'svetle_modry':
+            for idx, h in enumerate(hraci):
+                if (buff['y'] == h['y'] and (buff['x'] == h['x'] - 1 or buff['x'] == h['x'] + 1)):
+                    if buff['typ'] == 'heal':
+                        if h['hp'] < h['max_hp']:
+                            h['hp'] += 1
+                    else:
+                        h['buff'] = buff['typ']
+                    break
+            else:
+                nove_buffy.append(buff)
+        else:
+            nove_buffy.append(buff)
+    buffy_na_poli = nove_buffy
+
+# --- Hlavní smyčka serveru (hráč 1) ---
 while True:
-    pohyb_hrace()
-    if buttons_b.enter:
-        flashbang()
-    if buttons_b.up:
-        laser()
-
-    pohyb_enemaka()
-
-    if random.randint(0, 10) == 1:
-        enemy_vystrel()
-
-    update_strely()
-    update_buff_stavy()
-    nahodny_buff()
-    generuj_buff_na_poli()
-    update_buffy_na_poli()
-    kontrola_sestreleni_buffu()
-    kontrola_sebrani_buffu()
-    vykresli_hp_bar()
+    # 1. Zpracuj vstupy hráče 1 (controller_a)
+    vstupy1 = ziskej_vstupy_a()  # funkce pro čtení controlleru A
+    zpracuj_vstupy(0, vstupy1)
+    # 2. Přijmi vstupy hráče 2 (prijmi_vstupy_klienta)
+    vstupy2 = prijmi_vstupy_klienta()
+    zpracuj_vstupy(1, vstupy2)
+    # 3. Aktualizuj stav hry (střely, buffy, kolize, HP, ...)
+    update_strely_dual()
+    update_buffy_na_poli_dual()
+    kontrola_sebrani_buffu_dual()
+    # 4. Pošli stav klientovi (posli_stav_klientovi)
+    posli_stav_klientovi({"hraci": hraci, "strely": strely, "buffy": buffy_na_poli})
+    # 5. Vykresli svou polovinu
+    vykresli_pole(0)
     time.sleep_ms(100)
+
+# --- Hlavní smyčka klienta (hráč 2) ---
+# while True:
+#     1. Zpracuj vstupy hráče 2 (controller_b)
+#     2. Pošli vstupy serveru
+#     3. Přijmi stav hry od serveru
+#     4. Vykresli svou polovinu
+#     vykresli_pole(1)
+#     time.sleep_ms(100)
 
 # --- Wi-Fi a server ---
 if connect_to_wifi(WIFI_SSID, WIFI_PASS, WIFI_CONNECT_TIMEOUT_S):
