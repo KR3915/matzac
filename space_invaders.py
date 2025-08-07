@@ -30,6 +30,53 @@ def connect_to_wifi(ssid, password, timeout_s):
     print(f"Připojeno k Wi-Fi | IP: {sta.ifconfig()[0]}")
     return sta
 
+# --- Herní pole 10x20, dvouhráčový režim ---
+WIDTH = 10
+HEIGHT = 20
+
+# Hráč 1 (server, spodní polovina y=0–9), Hráč 2 (klient, horní polovina y=10–19)
+hraci = [
+    {"x": 5, "y": 1, "hp": 3, "max_hp": 3, "controller": "a", "buff": None, "stit": False, "klon": False, "klon_counter": 0},
+    {"x": 5, "y": HEIGHT-2, "hp": 3, "max_hp": 3, "controller": "b", "buff": None, "stit": False, "klon": False, "klon_counter": 0}
+]
+
+strely = []  # Každá střela: {x, y, dx, dy, typ, hrac}
+buffy_na_poli = []  # Každý buff: {x, y, typ, stav, barva}
+
+# --- Síťová synchronizace (pseudokód, nutno doplnit podle platformy) ---
+def posli_stav_klientovi(stav):
+    # serializace a odeslání stavu klientovi
+    pass
+
+def prijmi_vstupy_klienta():
+    # příjem vstupů klienta (pohyb, střelba, aktivace buffu)
+    return {}
+
+# --- Vykreslení poloviny pole ---
+def vykresli_pole(hrac_idx):
+    y_start = 0 if hrac_idx == 0 else 10
+    for x in range(WIDTH):
+        for y in range(y_start, y_start+10):
+            display.set_pixel(x, y-y_start, "black")
+    # Hráči
+    for idx, h in enumerate(hraci):
+        if y_start <= h["y"] < y_start+10:
+            color = "green" if idx == hrac_idx else "yellow"
+            display.set_pixel(h["x"], h["y"]-y_start, color)
+    # Střely
+    for s in strely:
+        if y_start <= s["y"] < y_start+10:
+            color = "red" if s["hrac"] == hrac_idx else "orange"
+            display.set_pixel(s["x"], s["y"]-y_start, color)
+    # Buffy
+    for b in buffy_na_poli:
+        if y_start <= b["y"] < y_start+10:
+            display.set_pixel(b["x"], b["y"]-y_start, b["barva"])
+    # HP bar
+    for i in range(hraci[hrac_idx]["max_hp"]):
+        color = "red" if i < hraci[hrac_idx]["hp"] else "black"
+        display.set_pixel(i, 9, color)
+
 # --- Herní stav ---
 hrac_X = 5
 hrac_Y = 9
@@ -282,28 +329,24 @@ def prohra():
         hrac_X = 5
         vykresli_hp_bar()
 
-# --- Hlavní smyčka hry ---
+# --- Hlavní smyčka serveru (hráč 1) ---
 while True:
-    pohyb_hrace()
-    if buttons_b.enter:
-        flashbang()
-    if buttons_b.up:
-        laser()
-
-    pohyb_enemaka()
-
-    if random.randint(0, 10) == 1:
-        enemy_vystrel()
-
-    update_strely()
-    update_buff_stavy()
-    nahodny_buff()
-    generuj_buff_na_poli()
-    update_buffy_na_poli()
-    kontrola_sestreleni_buffu()
-    kontrola_sebrani_buffu()
-    vykresli_hp_bar()
+    # 1. Zpracuj vstupy hráče 1 (controller_a)
+    # 2. Přijmi vstupy hráče 2 (prijmi_vstupy_klienta)
+    # 3. Aktualizuj stav hry (pohyb, střely, buffy, kolize, HP, ...)
+    # 4. Pošli stav klientovi (posli_stav_klientovi)
+    # 5. Vykresli svou polovinu
+    vykresli_pole(0)
     time.sleep_ms(100)
+
+# --- Hlavní smyčka klienta (hráč 2) ---
+# while True:
+#     1. Zpracuj vstupy hráče 2 (controller_b)
+#     2. Pošli vstupy serveru
+#     3. Přijmi stav hry od serveru
+#     4. Vykresli svou polovinu
+#     vykresli_pole(1)
+#     time.sleep_ms(100)
 
 # --- Wi-Fi a server ---
 if connect_to_wifi(WIFI_SSID, WIFI_PASS, WIFI_CONNECT_TIMEOUT_S):
