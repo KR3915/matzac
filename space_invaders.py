@@ -45,6 +45,9 @@ hrac_ma_stit = False
 klon_aktivni = False
 klon_strely_counter = 0
 
+# --- Přidání růžového buffu na heal ---
+buffy.append("heal")  # Přidat nový typ buffu
+
 # --- Aktivní buffy na ploše ---
 buffy_na_poli = []  # Každý buff: {'x', 'y', 'typ', 'stav'}
 
@@ -53,7 +56,8 @@ def generuj_buff_na_poli():
     if random.randint(0, 100) == 1:
         typ = random.choice(buffy)
         x = random.randint(0, 9)
-        buffy_na_poli.append({'x': x, 'y': 0, 'typ': typ, 'stav': 'modry'})
+        barva = 'pink' if typ == 'heal' else 'blue'
+        buffy_na_poli.append({'x': x, 'y': 0, 'typ': typ, 'stav': 'modry', 'barva': barva})
 
 # --- Update buffů na ploše ---
 def update_buffy_na_poli():
@@ -69,7 +73,10 @@ def update_buffy_na_poli():
         if buff['y'] > 9:
             continue
         # Vykreslení barvy
-        color = 'blue' if buff['stav'] == 'modry' else 'lightblue'
+        if buff['typ'] == 'heal':
+            color = 'pink' if buff['stav'] == 'modry' else 'lightpink'
+        else:
+            color = 'blue' if buff['stav'] == 'modry' else 'lightblue'
         display.set_pixel(buff['x'], buff['y'], color)
         nove_buffy.append(buff)
     buffy_na_poli = nove_buffy
@@ -87,14 +94,19 @@ def kontrola_sestreleni_buffu():
 
 # --- Sebrání buffu hráčem ze strany ---
 def kontrola_sebrani_buffu():
-    global buffy_na_poli, aktivni_buff
+    global buffy_na_poli, aktivni_buff, hrac_hp
     nove_buffy = []
     for buff in buffy_na_poli:
         if buff['stav'] == 'svetle_modry':
             # Hráč je vlevo nebo vpravo vedle buffu a na stejné úrovni
             if (buff['y'] == hrac_Y and (buff['x'] == hrac_X - 1 or buff['x'] == hrac_X + 1)):
-                aktivni_buff = buff['typ']
-                print(f"Sebral jsi buff: {aktivni_buff}")
+                if buff['typ'] == 'heal':
+                    if hrac_hp < MAX_HP:
+                        hrac_hp += 1
+                        print('Heal! HP:', hrac_hp)
+                else:
+                    aktivni_buff = buff['typ']
+                    print(f"Sebral jsi buff: {aktivni_buff}")
                 continue  # Buff sebere, už není na ploše
         nove_buffy.append(buff)
     buffy_na_poli = nove_buffy
@@ -235,16 +247,40 @@ def enemak_smrt():
     time.sleep_ms(500)
     prohra()
 
-# --- Prohra ---
+# --- HP hráče ---
+hrac_hp = 3
+MAX_HP = 3
+
+# --- Vykreslení HP baru ---
+def vykresli_hp_bar():
+    for i in range(MAX_HP):
+        color = 'red' if i < hrac_hp else 'black'
+        display.set_pixel(i, 9, color)
+
+# --- Úprava prohry ---
 def prohra():
-    while True:
+    global hrac_hp
+    hrac_hp -= 1
+    vykresli_hp_bar()
+    if hrac_hp <= 0:
+        while True:
+            display.set_pixel(hrac_X, hrac_Y, "red")
+            time.sleep_ms(500)
+            display.set_pixel(hrac_X, hrac_Y, "black")
+            time.sleep_ms(500)
+            if buttons_a.enter:
+                display.clear()
+                return
+    else:
+        # Reset pozice hráče
         display.set_pixel(hrac_X, hrac_Y, "red")
         time.sleep_ms(500)
         display.set_pixel(hrac_X, hrac_Y, "black")
         time.sleep_ms(500)
-        if buttons_a.enter:
-            display.clear()
-            return
+        # Reset pozice hráče na střed
+        global hrac_X
+        hrac_X = 5
+        vykresli_hp_bar()
 
 # --- Hlavní smyčka hry ---
 while True:
@@ -266,6 +302,7 @@ while True:
     update_buffy_na_poli()
     kontrola_sestreleni_buffu()
     kontrola_sebrani_buffu()
+    vykresli_hp_bar()
     time.sleep_ms(100)
 
 # --- Wi-Fi a server ---
