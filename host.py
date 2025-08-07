@@ -43,8 +43,8 @@ while True:
                     break
                 client_state = ujson.loads(line)
                 # Zde načti proměnné od klienta
-                hrac2_X = client_state.get('hrac2_X', 5)
-                hrac2_Y = client_state.get('hrac2_Y', 0)
+                hrac2_X = client_state.get('hrac_X', 5)
+                hrac2_Y = client_state.get('hrac_Y', 0)
                 # ... další proměnné ...
             except Exception as e:
                 print(f"Chyba při čtení od klienta: {e}")
