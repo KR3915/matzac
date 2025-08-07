@@ -2,11 +2,11 @@ import network
 import time
 import socket
 import ujson
+from game_logic import GameState
 
-# --- Konfigurace ---
 WIFI_SSID = "ESP-AP"
 WIFI_PASS = "protabulesa"
-SERVER_IP = "192.168.4.1" # Tuto IP adresu získejte z host.py po spuštění
+SERVER_IP = "192.168.4.1"
 SERVER_PORT = 1234
 WIFI_CONNECT_TIMEOUT_S = 10
 SOCKET_TIMEOUT_S = 5
@@ -30,51 +30,34 @@ def connect_to_wifi(ssid, password, timeout_s):
 # --- Hlavní skript ---
 if connect_to_wifi(WIFI_SSID, WIFI_PASS, WIFI_CONNECT_TIMEOUT_S):
     s = None
+    game = GameState()
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(SOCKET_TIMEOUT_S)
         s.connect((SERVER_IP, SERVER_PORT))
         print("Připojeno k serveru!")
 
-        # Hlavní komunikační smyčka
         while True:
-            # 1. PŘÍJEM DAT ZE SERVERU
+            # 1. Handle local (client) input
+            # Replace this with real input handling for your hardware
+            client_action = input("Client action (left/right/shoot/none): ")
+            msg = ujson.dumps({'action': client_action}) + '\n'
+            s.sendall(msg.encode('utf-8'))
+
+            # 2. Receive updated game state from host
             try:
                 line = s.readline()
                 if not line:
                     print("Server ukončil spojení.")
                     break
-                
-                server_data = ujson.loads(line)
-                
-                # Zobrazení dat na konzoli
-                print("--- Přijato ze serveru ---")
-                print(f"list_pp: {server_data.get('list_pp')}")
-                print(f"host_message: {server_data.get('host_message')}")
-                print(f"server_processed_input: {server_data.get('received_client_input')}")
-                print("--------------------------")
-            
-            except (ValueError, KeyError) as e:
-                print(f"Chyba při zpracování JSON od serveru: {e}")
+                state = ujson.loads(line)
+                game.from_dict(state)
+                # game.render()  # Implement for your display
+                print(f"Game state: {game.to_dict()}")
+            except Exception as e:
+                print(f"Chyba při zpracování stavu hry od serveru: {e}")
                 continue
-            except OSError as e:
-                print(f"Chyba při čtení ze socketu (timeout): {e}")
-                continue
-
-            # 2. ODESLÁNÍ DAT NA SERVER
-            # Příklad s uživatelským vstupem z konzole.
-            # V reálné aplikaci by to byl vstup z tlačítek, joysticku atd.
-            user_input = input("Zadejte zprávu pro hosta: ")
-            
-            data_to_send = {
-                "user_input": user_input
-            }
-            
-            serialized_data = ujson.dumps(data_to_send) + '\n'
-            s.sendall(serialized_data.encode('utf-8'))
-            
-            time.sleep(0.5) # Krátká pauza
-            
+            time.sleep(0.1)
     except OSError as e:
         print(f"Chyba spojení: {e}")
     finally:
