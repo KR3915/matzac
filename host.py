@@ -3,6 +3,7 @@ import socket
 import ujson
 import time
 import random
+from logic import *
 # --- Konfigurace Wi-Fi ---
 WIFI_SSID = "ESP-AP"
 WIFI_PASS = "protabulesa"
@@ -80,7 +81,7 @@ while True:
                 for strela_Y in range(10):
                     display.set_pixel(strela_X, 9-strela_Y, "red")
                     display.set_pixel(hrac_X, hrac_Y, "green")
-                    time.sleep_ms(100)   
+                    time.sleep_ms(100)
                     if buttons_a.left and hrac_X > 0:
                         hrac_do_leva()
                     if buttons_a.right and hrac_X < 9:
@@ -106,7 +107,7 @@ while True:
                 for strela_Y in range(10):
                     display.set_pixel(strela_X, 9-strela_Y, "red")
                     display.set_pixel(hrac_X, hrac_Y, "green")
-                    time.sleep_ms(100)   
+                    time.sleep_ms(100)
                     if buttons_a.left and hrac_X > 0:
                         hrac_do_leva()
                     if buttons_a.right and hrac_X < 9:
@@ -116,7 +117,7 @@ while True:
                 for strela_Y in range(10):
                     display.set_pixel(strela_X, 9-strela_Y, "black")
                     display.set_pixel(hrac_X, hrac_Y, "green")
-                    time.sleep_ms(100)   
+                    time.sleep_ms(100)
                     if buttons_a.left and hrac_X > 0:
                         hrac_do_leva()
                     if buttons_a.right and hrac_X < 9:
@@ -151,8 +152,8 @@ while True:
                     if buttons_a.left and hrac_X > 0:
                         hrac_do_leva()
                     if buttons_a.right and hrac_X < 9:
-                        hrac_do_prava() 
-                    display.set_pixel(x, y, "black")       
+                        hrac_do_prava()
+                    display.set_pixel(x, y, "black")
                 if enemak_X == hrac_X and y == 9 :
                     c = 9
                     d = 0
