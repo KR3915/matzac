@@ -37,9 +37,109 @@ enemak_X = 5
 
 strely = []  # Sjednocený seznam všech střel
 
+# --- Buff systém ---
+buffy = ["velka_strela", "stit", "klon"]
+aktivni_buff = None
+buff_timer = 0
+hrac_ma_stit = False
+klon_aktivni = False
+klon_strely_counter = 0
+
+# --- Aktivní buffy na ploše ---
+buffy_na_poli = []  # Každý buff: {'x', 'y', 'typ', 'stav'}
+
+# --- Generování buffu na ploše ---
+def generuj_buff_na_poli():
+    if random.randint(0, 100) == 1:
+        typ = random.choice(buffy)
+        x = random.randint(0, 9)
+        buffy_na_poli.append({'x': x, 'y': 0, 'typ': typ, 'stav': 'modry'})
+
+# --- Update buffů na ploše ---
+def update_buffy_na_poli():
+    global buffy_na_poli, aktivni_buff
+    nove_buffy = []
+    for buff in buffy_na_poli:
+        # Smazat starou pozici
+        display.set_pixel(buff['x'], buff['y'], 'black')
+        # Posun dolů, pokud není světle modrý
+        if buff['stav'] == 'modry':
+            buff['y'] += 1
+        # Pokud propadne, zmizí
+        if buff['y'] > 9:
+            continue
+        # Vykreslení barvy
+        color = 'blue' if buff['stav'] == 'modry' else 'lightblue'
+        display.set_pixel(buff['x'], buff['y'], color)
+        nove_buffy.append(buff)
+    buffy_na_poli = nove_buffy
+
+# --- Sestřelení buffu střelou ---
+def kontrola_sestreleni_buffu():
+    global buffy_na_poli
+    for buff in buffy_na_poli:
+        if buff['stav'] == 'modry':
+            for strela in strely:
+                if strela['typ'] == 'player' and strela['x'] == buff['x'] and strela['y'] == buff['y']:
+                    buff['stav'] = 'svetle_modry'
+                    # Smazat střelu
+                    strela['y'] = -1
+
+# --- Sebrání buffu hráčem ze strany ---
+def kontrola_sebrani_buffu():
+    global buffy_na_poli, aktivni_buff
+    nove_buffy = []
+    for buff in buffy_na_poli:
+        if buff['stav'] == 'svetle_modry':
+            # Hráč je vlevo nebo vpravo vedle buffu a na stejné úrovni
+            if (buff['y'] == hrac_Y and (buff['x'] == hrac_X - 1 or buff['x'] == hrac_X + 1)):
+                aktivni_buff = buff['typ']
+                print(f"Sebral jsi buff: {aktivni_buff}")
+                continue  # Buff sebere, už není na ploše
+        nove_buffy.append(buff)
+    buffy_na_poli = nove_buffy
+
+# --- Náhodné získání buffu ---
+def nahodny_buff():
+    global aktivni_buff, buff_timer
+    if aktivni_buff is None and random.randint(0, 100) == 1:
+        aktivni_buff = random.choice(buffy)
+        print(f"Získal jsi buff: {aktivni_buff}")
+        # Zde můžete přidat vizuální indikaci buffu
+
+# --- Aktivace buffu ---
+def aktivuj_buff():
+    global aktivni_buff, buff_timer, hrac_ma_stit, klon_aktivni, klon_strely_counter
+    if aktivni_buff == "velka_strela":
+        # Velká střela 3x3
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                x = hrac_X + dx
+                y = hrac_Y - 1 + dy
+                if 0 <= x <= 9 and 0 <= y <= 9:
+                    strely.append({"x": x, "y": y, "dx": 0, "dy": -1, "typ": "player"})
+        aktivni_buff = None
+    elif aktivni_buff == "stit":
+        hrac_ma_stit = True
+        buff_timer = time.ticks_ms()
+        aktivni_buff = None
+    elif aktivni_buff == "klon":
+        klon_aktivni = True
+        klon_strely_counter = 0
+        buff_timer = time.ticks_ms()
+        aktivni_buff = None
+
+# --- Update štítu a klonu ---
+def update_buff_stavy():
+    global hrac_ma_stit, klon_aktivni, buff_timer
+    if hrac_ma_stit and time.ticks_diff(time.ticks_ms(), buff_timer) > 3000:
+        hrac_ma_stit = False
+    if klon_aktivni and time.ticks_diff(time.ticks_ms(), buff_timer) > 5000:
+        klon_aktivni = False
+
 # --- Pohyb hráče ---
 def pohyb_hrace():
-    global hrac_X, strely
+    global hrac_X, strely, klon_strely_counter
     if buttons_a.left:
         hrac_X = max(0, hrac_X - 1)
     elif buttons_a.right:
@@ -48,13 +148,22 @@ def pohyb_hrace():
         # Výstřel hráče
         nova_strela = {"x": hrac_X, "y": hrac_Y - 1, "dx": 0, "dy": -1, "typ": "player"}
         strely.append(nova_strela)
+        # Klon střílí každou druhou střelu
+        if klon_aktivni:
+            klon_strely_counter += 1
+            if klon_strely_counter % 2 == 0:
+                klon_x = min(9, max(0, hrac_X + 2))  # Klon je 2 vpravo, pokud je místo
+                strely.append({"x": klon_x, "y": hrac_Y - 1, "dx": 0, "dy": -1, "typ": "player"})
     elif buttons_a.up:
         # Pokus o odražení nepřátelské střely přímo nad hráčem
         for s in strely:
             if s["typ"] == "enemy" and s["x"] == hrac_X and s["y"] == hrac_Y - 1:
-                s["typ"] = "reflected"   # změní typ střely na odraženou
-                s["dy"] = -1             # změní směr letu na nahoru
-                break                    # odrazí jen jednu střelu
+                s["typ"] = "reflected"
+                s["dy"] = -1
+                break
+    # Aktivace buffu spodním tlačítkem
+    if buttons_a.enter and aktivni_buff:
+        aktivuj_buff()
 
 # --- Update všech střel ---
 def update_strely():
@@ -72,8 +181,9 @@ def update_strely():
                 continue
             # Kolize s hráčem
             if strela["typ"] == "enemy" and strela["x"] == hrac_X and strela["y"] == hrac_Y:
-                prohra()
-                continue
+                if not hrac_ma_stit:
+                    prohra()
+                    continue
             # Vykreslení střely podle typu
             if strela["typ"] == "player":
                 display.set_pixel(strela["x"], strela["y"], "red")
@@ -150,6 +260,12 @@ while True:
         enemy_vystrel()
 
     update_strely()
+    update_buff_stavy()
+    nahodny_buff()
+    generuj_buff_na_poli()
+    update_buffy_na_poli()
+    kontrola_sestreleni_buffu()
+    kontrola_sebrani_buffu()
     time.sleep_ms(100)
 
 # --- Wi-Fi a server ---
