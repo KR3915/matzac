@@ -3,137 +3,246 @@ import socket
 import ujson
 import time
 import random
+# --- Konfigurace Wi-Fi ---
+WIFI_SSID = "ESP-AP"
+WIFI_PASS = "protabulesa"
+SERVER_PORT = 1234
+SOCKET_TIMEOUT_S = 5
 
-class GameState:
-    def __init__(self):
-        self.players = {
-            'host': {'x': 5, 'y': 9, 'alive': True, 'shot': None},
-            'client': {'x': 5, 'y': 0, 'alive': True, 'shot': None}
-        }
-        self.enemy = {'x': 5, 'alive': True}
-        self.last_action = {'host': None, 'client': None}
-        self.flashbang = False
-        self.laser = False
-        self.display = None
-
-    def move_player(self, player, direction):
-        if not self.players[player]['alive']:
-            return
-        if direction == 'left' and self.players[player]['x'] > 0:
-            self.players[player]['x'] -= 1
-        elif direction == 'right' and self.players[player]['x'] < 9:
-            self.players[player]['x'] += 1
-        self.last_action[player] = f'move_{direction}'
-
-    def player_shoot(self, player):
-        if not self.players[player]['alive']:
-            return
-        x = self.players[player]['x']
-        y = self.players[player]['y']
-        direction = -1 if player == 'host' else 1
-        shot_path = []
-        for i in range(10):
-            ny = y + i * direction
-            if 0 <= ny < 10:
-                shot_path.append((x, ny))
-        self.players[player]['shot'] = shot_path
-        self.last_action[player] = 'shoot'
-
-    def update_shots(self):
-        for player in self.players:
-            shot = self.players[player]['shot']
-            if shot and len(shot) > 0:
-                x, y = shot.pop(0)
-                if self.enemy['alive'] and x == self.enemy['x'] and ((player == 'host' and y == 0) or (player == 'client' and y == 9)):
-                    self.enemy['alive'] = False
-                self.players[player]['shot'] = shot if len(shot) > 0 else None
-
-    def move_enemy(self):
-        if not self.enemy['alive']:
-            return
-        g = [-1, 0, 0, 0, 0, 0, 0, 1]
-        e = g[random.randint(0, 7)]
-        if self.enemy['x'] == 0 and e == -1:
-            pass
-        elif self.enemy['x'] == 9 and e == 1:
-            pass
-        else:
-            self.enemy['x'] += e
-
-    def to_dict(self):
-        return {
-            'players': self.players,
-            'enemy': self.enemy,
-            'flashbang': self.flashbang,
-            'laser': self.laser
-        }
-
-    def from_dict(self, data):
-        self.players = data['players']
-        self.enemy = data['enemy']
-        self.flashbang = data.get('flashbang', False)
-        self.laser = data.get('laser', False)
-
+# --- Síťová inicializace (AP) ---
 ap = network.WLAN(network.AP_IF)
 ap.active(True)
-ap.config(essid="ESP-AP", password="protabulesa", authmode=network.AUTH_WPA2_PSK)
-
+ap.config(essid=WIFI_SSID, password=WIFI_PASS, authmode=network.AUTH_WPA2_PSK)
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(('', 1234))
+s.bind(('', SERVER_PORT))
 s.listen(1)
-
 print(f"Server running! | IP: {ap.ifconfig()[0]}")
 
-game = GameState()
+# --- Herní proměnné (původní logika) ---
+hrac_X = 5
+hrac_Y = 9
+enemak_X = 5
+strela_X = None
+strela_Y = None
+# ... další proměnné dle původního emzáci.py ...
 
+# --- Hlavní smyčka ---
 while True:
     print("Waiting for a connection...")
     conn, addr = s.accept()
-    conn.settimeout(5.0)
+    conn.settimeout(SOCKET_TIMEOUT_S)
     print(f"Client connected from: {addr}")
-
     try:
         while True:
-            # 1. Receive client action
+            # --- 1. Synchronizace: přijmi stav od klienta ---
             try:
                 line = conn.readline()
                 if not line:
-                    print("Client disconnected gracefully.")
+                    print("Client disconnected.")
                     break
-                client_msg = ujson.loads(line)
-                client_action = client_msg.get('action')
+                client_state = ujson.loads(line)
+                # Zde načti proměnné od klienta
+                hrac2_X = client_state.get('hrac2_X', 5)
+                hrac2_Y = client_state.get('hrac2_Y', 0)
+                # ... další proměnné ...
             except Exception as e:
-                print(f"Error receiving client action: {e}")
-                client_action = None
+                print(f"Chyba při čtení od klienta: {e}")
 
-            # 2. Handle local (host) input
-            host_action = input("Host action (left/right/shoot/none): ")
-            if host_action == 'left':
-                game.move_player('host', 'left')
-            elif host_action == 'right':
-                game.move_player('host', 'right')
-            elif host_action == 'shoot':
-                game.player_shoot('host')
+            # --- Trvalé rozsvícení červeného pixelu na pozici druhého hráče ---
+            display.set_pixel(hrac2_X, hrac2_Y, "red")
 
-            # 3. Apply client action
-            if client_action == 'left':
-                game.move_player('client', 'left')
-            elif client_action == 'right':
-                game.move_player('client', 'right')
-            elif client_action == 'shoot':
-                game.player_shoot('client')
+            # --- 2. Herní logika (původní kód z emzáci.py) ---
+            from logic import *
+            import random
+            import time
+            # Původní proměnné už jsou nahoře
+            def hrac_do_leva() :
+                global hrac_X
+                time.sleep_ms(100)
+                display.set_pixel(hrac_X, hrac_Y, "black")
+                hrac_X = hrac_X - 1
+                display.set_pixel(hrac_X, hrac_Y, "green")
+                return
 
-            # 4. Update game state
-            game.update_shots()
-            game.move_enemy()
+            def hrac_do_prava() :
+                global hrac_X
+                time.sleep_ms(100)
+                display.set_pixel(hrac_X, hrac_Y, "black")
+                hrac_X = hrac_X + 1
+                display.set_pixel(hrac_X, hrac_Y, "green")
+                return
 
-            # 5. Send updated state to client
-            state_to_send = ujson.dumps(game.to_dict()) + '\n'
-            conn.sendall(state_to_send.encode('utf-8'))
-            time.sleep(0.1)
+            def hrac_vystrel() :
+                global strela_X
+                global strela_Y
+                strela_X = hrac_X
+                strela_Y = hrac_Y
+                for strela_Y in range(10):
+                    display.set_pixel(strela_X, 9-strela_Y, "red")
+                    display.set_pixel(hrac_X, hrac_Y, "green")
+                    time.sleep_ms(100)   
+                    if buttons_a.left and hrac_X > 0:
+                        hrac_do_leva()
+                    if buttons_a.right and hrac_X < 9:
+                        hrac_do_prava()
+                    pohyb_enemaka()
+                    enemak_smrt()
+                    display.set_pixel(strela_X, 9-strela_Y, "black")
 
-    except OSError as e:
-        print(f"Connection with {addr} lost: {e}")
+            def flashbang() :
+                c = 0
+                d = 0
+                for d in range(10):
+                    for c in range(10):
+                        display.set_pixel(c, d, "white")
+                time.sleep_ms(1000)
+                display.clear()
+
+            def laser() :
+                global strela_X
+                global strela_Y
+                strela_X = hrac_X
+                strela_Y = hrac_Y
+                for strela_Y in range(10):
+                    display.set_pixel(strela_X, 9-strela_Y, "red")
+                    display.set_pixel(hrac_X, hrac_Y, "green")
+                    time.sleep_ms(100)   
+                    if buttons_a.left and hrac_X > 0:
+                        hrac_do_leva()
+                    if buttons_a.right and hrac_X < 9:
+                        hrac_do_prava()
+                    pohyb_enemaka()
+                    enemak_smrt()
+                for strela_Y in range(10):
+                    display.set_pixel(strela_X, 9-strela_Y, "black")
+                    display.set_pixel(hrac_X, hrac_Y, "green")
+                    time.sleep_ms(100)   
+                    if buttons_a.left and hrac_X > 0:
+                        hrac_do_leva()
+                    if buttons_a.right and hrac_X < 9:
+                        hrac_do_prava()
+                    pohyb_enemaka()
+                    if enemak_X == strela_X :
+                        d = 0
+                        c = 0
+                        for i in range(9):
+                            d += 1
+                            if strela_X - d > -1 :
+                                display.set_pixel(strela_X - d + 1, c, "black")
+                                display.set_pixel(strela_X - d, c, "red")
+                            if strela_X + d < 10 :
+                                display.set_pixel(strela_X + d - 1, c, "black")
+                                display.set_pixel(strela_X + d, c, "red")
+                            i = i + 1
+                            time.sleep_ms(200)
+                        display.set_pixel(0, c, "black")
+                        display.set_pixel(9, c, "black")
+                        prohra()
+                        return()
+
+            def strileni_enemaka() :
+                x = enemak_X
+                y = 9
+                for y in range(10):
+                    display.set_pixel(x, y, "red")
+                    display.set_pixel(enemak_X, 0, "orange")
+                    display.set_pixel(hrac_X, hrac_Y, "green")
+                    time.sleep_ms(100)
+                    if buttons_a.left and hrac_X > 0:
+                        hrac_do_leva()
+                    if buttons_a.right and hrac_X < 9:
+                        hrac_do_prava() 
+                    display.set_pixel(x, y, "black")       
+                if enemak_X == hrac_X and y == 9 :
+                    c = 9
+                    d = 0
+                    for i in range(9):
+                        d += 1
+                        if x - d > -1 :
+                            display.set_pixel(x - d + 1, c, "black")
+                            display.set_pixel(x - d, c, "red")
+                        if x + d < 10 :
+                            display.set_pixel(x + d - 1, c, "black")
+                            display.set_pixel(x + d, c, "red")
+                        i = i + 1
+                        time.sleep_ms(200)
+                    display.set_pixel(0, c, "black")
+                    display.set_pixel(9, c, "black")
+                    prohra()
+
+            def pohyb_enemaka():
+                global enemak_X
+                g = [-1, 0, 0, 0, 0, 0, 0, 1]
+                e = g[random.randint(0,7)]
+                if enemak_X == 0 and e == -1:
+                    display.set_pixel(enemak_X, 0, "orange")
+                elif enemak_X == 9 and e == 1:
+                    display.set_pixel(enemak_X, 0, "orange")
+                else :
+                    display.set_pixel(enemak_X, 0, "black")
+                    enemak_X = enemak_X + e
+                    display.set_pixel(enemak_X, 0, "orange")
+                    time.sleep_ms(100)
+
+            def enemak_smrt() :
+                global strela_Y
+                global strela_X
+                global enemak_X
+                if strela_X == enemak_X and strela_Y == 9 :
+                    print("ahoj")
+                    d = 0
+                    c = 0
+                    for i in range(9):
+                        d += 1
+                        if strela_X - d > -1 :
+                            display.set_pixel(strela_X - d + 1, c, "black")
+                            display.set_pixel(strela_X - d, c, "red")
+                        if strela_X + d < 10 :
+                            display.set_pixel(strela_X + d - 1, c, "black")
+                            display.set_pixel(strela_X + d, c, "red")
+                        i = i + 1
+                        time.sleep_ms(200)
+                    display.set_pixel(0, c, "black")
+                    display.set_pixel(9, c, "black")
+                    prohra()
+
+            def prohra() :
+                while True :
+                    if buttons_a.enter :
+                        display.clear()
+                        return ()
+
+            # Hlavní smyčka hry
+            if buttons_a.left and hrac_X > 0:
+                hrac_do_leva()
+            if buttons_a.right and hrac_X < 9:
+                hrac_do_prava()
+            if buttons_a.enter:
+                hrac_vystrel()
+            if buttons_b.enter:
+                flashbang()
+            pohyb_enemaka()
+            p = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+            if p[random.randint(0, 10)] == 1:
+                strileni_enemaka()
+            if buttons_b.up :
+                laser()
+
+            # --- 3. Synchronizace: odešli stav hostitele klientovi ---
+            state_to_send = {
+                'hrac_X': hrac_X,
+                'hrac_Y': hrac_Y,
+                'enemak_X': enemak_X,
+                'strela_X': strela_X,
+                'strela_Y': strela_Y,
+                # ... další proměnné ...
+            }
+            try:
+                conn.sendall((ujson.dumps(state_to_send) + '\n').encode('utf-8'))
+            except Exception as e:
+                print(f"Chyba při odesílání klientovi: {e}")
+            time.sleep(0.05)
     finally:
         conn.close()
-        print(f"Connection with {addr} closed. Ready for next client.")
+        print("Connection closed.")
+# ... zbytek původního kódu zůstává ...
