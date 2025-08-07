@@ -35,21 +35,20 @@ hrac_X = 5
 hrac_Y = 9
 enemak_X = 5
 
-strely_hrace = []
-strely_enemaka = []
+strely = []  # Sjednocený seznam všech střel
 
 # --- Pohyb hráče ---
 def pohyb_hrace():
-    global hrac_X
-    if buttons_a.left():
+    global hrac_X, strely
+    if buttons_a.left:
         hrac_X = max(0, hrac_X - 1)
-    elif buttons_a.right():
-        hrac_X = min(WIDTH - 1, hrac_X + 1)
-    if buttons_a.down():
+    elif buttons_a.right:
+        hrac_X = min(9, hrac_X + 1)
+    if buttons_a.down:
         # Výstřel hráče
         nova_strela = {"x": hrac_X, "y": hrac_Y - 1, "dx": 0, "dy": -1, "typ": "player"}
         strely.append(nova_strela)
-    elif buttons_a.up():
+    elif buttons_a.up:
         # Pokus o odražení nepřátelské střely přímo nad hráčem
         for s in strely:
             if s["typ"] == "enemy" and s["x"] == hrac_X and s["y"] == hrac_Y - 1:
@@ -57,37 +56,37 @@ def pohyb_hrace():
                 s["dy"] = -1             # změní směr letu na nahoru
                 break                    # odrazí jen jednu střelu
 
-def update_strely_hrace():
-    global strely_hrace
+# --- Update všech střel ---
+def update_strely():
+    global strely
     nove_strely = []
-    for strela in strely_hrace:
+    for strela in strely:
         display.set_pixel(strela["x"], strela["y"], "black")
-        strela["y"] -= 1
-        if strela["y"] >= 0:
-            if strela["x"] == enemak_X and strela["y"] == 0:
+        strela["x"] += strela.get("dx", 0)
+        strela["y"] += strela.get("dy", 0)
+        # Kontrola, zda je střela stále na herním poli
+        if 0 <= strela["x"] <= 9 and 0 <= strela["y"] <= 9:
+            # Kolize s enemákem
+            if strela["typ"] in ("player", "reflected") and strela["x"] == enemak_X and strela["y"] == 0:
                 enemak_smrt()
-            else:
+                continue
+            # Kolize s hráčem
+            if strela["typ"] == "enemy" and strela["x"] == hrac_X and strela["y"] == hrac_Y:
+                prohra()
+                continue
+            # Vykreslení střely podle typu
+            if strela["typ"] == "player":
                 display.set_pixel(strela["x"], strela["y"], "red")
-                nove_strely.append(strela)
-    strely_hrace = nove_strely
+            elif strela["typ"] == "enemy":
+                display.set_pixel(strela["x"], strela["y"], "orange")
+            elif strela["typ"] == "reflected":
+                display.set_pixel(strela["x"], strela["y"], "blue")
+            nove_strely.append(strela)
+    strely = nove_strely
 
 # --- Střelba enemáka ---
 def enemy_vystrel():
-    strely_enemaka.append({"x": enemak_X, "y": 1})
-
-def update_strely_enemaka():
-    global strely_enemaka
-    nove_strely = []
-    for strela in strely_enemaka:
-        display.set_pixel(strela["x"], strela["y"], "black")
-        strela["y"] += 1
-        if strela["y"] <= 9:
-            if strela["x"] == hrac_X and strela["y"] == hrac_Y:
-                prohra()
-            else:
-                display.set_pixel(strela["x"], strela["y"], "orange")
-                nove_strely.append(strela)
-    strely_enemaka = nove_strely
+    strely.append({"x": enemak_X, "y": 1, "dx": 0, "dy": 1, "typ": "enemy"})
 
 # --- Flashbang & Laser ---
 def flashbang():
@@ -139,12 +138,7 @@ def prohra():
 
 # --- Hlavní smyčka hry ---
 while True:
-    if buttons_a.left and hrac_X > 0:
-        hrac_do_leva()
-    if buttons_a.right and hrac_X < 9:
-        hrac_do_prava()
-    if buttons_a.enter:
-        hrac_vystrel()
+    pohyb_hrace()
     if buttons_b.enter:
         flashbang()
     if buttons_b.up:
@@ -155,8 +149,7 @@ while True:
     if random.randint(0, 10) == 1:
         enemy_vystrel()
 
-    update_strely_hrace()
-    update_strely_enemaka()
+    update_strely()
     time.sleep_ms(100)
 
 # --- Wi-Fi a server ---
