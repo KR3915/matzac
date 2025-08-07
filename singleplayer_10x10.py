@@ -5,8 +5,8 @@ import random
 DISPLAY_WIDTH = 10
 DISPLAY_HEIGHT = 10
 PLAYER_START_X = 5
-PLAYER_START_Y = 8  # Hráč hraje dole (řádek 8)
-MAX_SHOTS = 8  # Maximální počet střel najednou
+PLAYER_START_Y = 9  # Hráč hraje úplně dole (řádek 9)
+MAX_SHOTS = 6  # Optimální počet střel pro 10x10
 
 # --- Herní stav ---
 class SinglePlayerGameState:
@@ -26,17 +26,19 @@ class SinglePlayerGameState:
         
         # Herní stav
         self.game_over = False
+        self.level = 1
 
     def init_enemies(self):
         self.enemies = []
-        # Vytvoříme nepřátele v horní části obrazovky (řádky 0-4)
+        # Vytvoříme nepřátele v horní části obrazovky (řádky 0-3)
         for row in range(2):  # 2 řádky nepřátel
             for col in range(8):  # 8 nepřátel v řádku
-                if col < DISPLAY_WIDTH:
+                if col < DISPLAY_WIDTH - 1:  # Necháme místo na okrajích
                     self.enemies.append({
                         'x': col + 1,
                         'y': row + 1,
-                        'alive': True
+                        'alive': True,
+                        'type': 'normal'
                     })
 
     def move_player(self, direction):
@@ -53,26 +55,28 @@ class SinglePlayerGameState:
         # Přidáme novou střelu
         self.player_shots.append({
             'x': self.player_x,
-            'y': self.player_y - 1
+            'y': self.player_y - 1,
+            'active': True
         })
 
     def update_shots(self):
         # Pohyb střel hráče (nahoru)
         shots_to_remove = []
         for i, shot in enumerate(self.player_shots):
-            shot['y'] -= 1
-            if shot['y'] < 0:
-                shots_to_remove.append(i)
-            else:
-                # Kontrola zásahu nepřátel
-                for enemy in self.enemies:
-                    if (enemy['alive'] and 
-                        enemy['x'] == shot['x'] and 
-                        enemy['y'] == shot['y']):
-                        enemy['alive'] = False
-                        shots_to_remove.append(i)
-                        self.score += 10
-                        break
+            if shot['active']:
+                shot['y'] -= 1
+                if shot['y'] < 0:
+                    shots_to_remove.append(i)
+                else:
+                    # Kontrola zásahu nepřátel
+                    for enemy in self.enemies:
+                        if (enemy['alive'] and 
+                            enemy['x'] == shot['x'] and 
+                            enemy['y'] == shot['y']):
+                            enemy['alive'] = False
+                            shots_to_remove.append(i)
+                            self.score += 10
+                            break
         
         # Odstraníme střely, které zasáhly nebo opustily obrazovku
         for i in reversed(shots_to_remove):
@@ -80,11 +84,11 @@ class SinglePlayerGameState:
                 self.player_shots.pop(i)
 
     def move_enemies(self):
-        # Jednoduchý pohyb nepřátel
+        # Chytřejší pohyb nepřátel
         for enemy in self.enemies:
             if enemy['alive']:
-                # Náhodný pohyb
-                if random.randint(0, 20) == 0:  # Pomalejší pohyb
+                # Náhodný pohyb s větší pravděpodobností zůstat na místě
+                if random.randint(0, 25) == 0:  # Pomalejší pohyb
                     direction = random.choice([-1, 0, 1])
                     new_x = enemy['x'] + direction
                     if 0 <= new_x < DISPLAY_WIDTH:
@@ -107,7 +111,7 @@ def render_display(game_state):
     
     # Vykreslíme střely hráče (žluté)
     for shot in game_state.player_shots:
-        if 0 <= shot['y'] < DISPLAY_HEIGHT:
+        if shot['active'] and 0 <= shot['y'] < DISPLAY_HEIGHT:
             display.set_pixel(shot['x'], shot['y'], "yellow")
     
     # Vykreslíme nepřátele (oranžoví)
@@ -118,30 +122,51 @@ def render_display(game_state):
 def show_game_over():
     """Zobrazí konec hry na 10x10 displeji"""
     display.clear()
+    
     # Zelená obrazovka = výhra
     for x in range(DISPLAY_WIDTH):
         for y in range(DISPLAY_HEIGHT):
             display.set_pixel(x, y, "green")
-    time.sleep(2)
+    time.sleep(1.5)
     
-    # Blikající skóre
-    for _ in range(5):
+    # Animované skóre
+    for _ in range(3):
         display.clear()
-        time.sleep(0.5)
+        time.sleep(0.3)
+        
         # Zobrazíme skóre jako světlé pixely
         score_display = min(game_state.score // 10, DISPLAY_WIDTH * DISPLAY_HEIGHT)
         pixels_shown = 0
+        
         for x in range(DISPLAY_WIDTH):
             for y in range(DISPLAY_HEIGHT):
                 if pixels_shown < score_display:
                     display.set_pixel(x, y, "white")
                     pixels_shown += 1
-        time.sleep(0.5)
+        
+        time.sleep(0.7)
+
+def show_start_screen():
+    """Zobrazí úvodní obrazovku"""
+    display.clear()
+    
+    # Animace - postupně se rozsvítí displej
+    for y in range(DISPLAY_HEIGHT):
+        for x in range(DISPLAY_WIDTH):
+            display.set_pixel(x, y, "blue")
+            time.sleep(0.05)
+    
+    time.sleep(1)
+    display.clear()
 
 # --- Hlavní smyčka ---
-print("Singleplayer Space Invaders pro Logic v2.0 (10x10)")
+print("=== Space Invaders pro Logic v2.0 ===")
 print("Ovládání: A+levo/pravo = pohyb, A+Enter = střelba")
 print("Můžete střílet až", MAX_SHOTS, "střel najednou!")
+print("Cíl: Zničte všechny nepřátele!")
+
+# Zobrazíme úvodní obrazovku
+show_start_screen()
 
 # Inicializace hry
 game_state = SinglePlayerGameState()
@@ -171,20 +196,20 @@ try:
         
         # Kontrola konce hry
         if game_state.game_over:
-            print(f"Game Over! Skóre: {game_state.score}")
+            print(f"🎉 VÝHRA! Skóre: {game_state.score}")
             show_game_over()
             
             # Čekání na restart
-            print("Stiskněte A+Enter pro restart")
+            print("Stiskněte A+Enter pro novou hru")
             while True:
                 if buttons_a.enter:
                     # Restart hry
                     game_state = SinglePlayerGameState()
-                    print("Nová hra!")
+                    print("🚀 Nová hra!")
                     break
                 time.sleep(0.1)
         
-        time.sleep(0.1)  # 10 FPS
+        time.sleep(0.08)  # ~12 FPS pro plynulejší hru
 
 except KeyboardInterrupt:
     print("Hra ukončena")
