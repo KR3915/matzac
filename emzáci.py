@@ -30,167 +30,206 @@ def connect_to_wifi(ssid, password, timeout_s):
 from logic import *
 import random
 import time
-a = 5
-b = 9
-f = 5
+hrac_X = 5
+hrac_Y = 9
+enemak_X = 5
+
+def hrac_do_leva() :
+    global hrac_X
+    time.sleep_ms(100)
+    display.set_pixel(hrac_X, hrac_Y, "black")
+    hrac_X = hrac_X - 1
+    display.set_pixel(hrac_X, hrac_Y, "green")
+    return
+
+def hrac_do_prava() :
+    global hrac_X
+    time.sleep_ms(100)
+    display.set_pixel(hrac_X, hrac_Y, "black")
+    hrac_X = hrac_X + 1
+    display.set_pixel(hrac_X, hrac_Y, "green")
+    return
+
+def hrac_vystrel() :
+    global strela_X
+    global strela_Y
+    strela_X = hrac_X
+    strela_Y = hrac_Y
+    for strela_Y in range(10):
+        display.set_pixel(strela_X, 9-strela_Y, "red")
+        display.set_pixel(hrac_X, hrac_Y, "green")
+        time.sleep_ms(100)   
+
+        if buttons_a.left and hrac_X > 0:
+            hrac_do_leva()
+
+        if buttons_a.right and hrac_X < 9:
+            hrac_do_prava()
+        
+        pohyb_enemaka()
+        enemak_smrt()
+
+        display.set_pixel(strela_X, 9-strela_Y, "black")
 
 
 
-while True :
-    g = [-1, 0, 0, 0, 1]
-    e = g[random.randint(0,4)]
-    if f == 0 and e == -1:
-        display.set_pixel(f, 0, "orange")
-    elif f == 9 and e == 1:
-        display.set_pixel(f, 0, "orange")
+        
+def flashbang() :
+    c = 0
+    d = 0
+    for d in range(10):
+        for c in range(10):
+            display.set_pixel(c, d, "white")
+    time.sleep_ms(1000)
+    display.clear()
+
+def laser() :
+    global strela_X
+    global strela_Y
+    strela_X = hrac_X
+    strela_Y = hrac_Y
+    for strela_Y in range(10):
+        display.set_pixel(strela_X, 9-strela_Y, "red")
+        display.set_pixel(hrac_X, hrac_Y, "green")
+        time.sleep_ms(100)   
+
+        if buttons_a.left and hrac_X > 0:
+            hrac_do_leva()
+
+        if buttons_a.right and hrac_X < 9:
+            hrac_do_prava()
+
+        pohyb_enemaka()
+        enemak_smrt()
+
+    for strela_Y in range(10):
+        display.set_pixel(strela_X, 9-strela_Y, "black")
+        display.set_pixel(hrac_X, hrac_Y, "green")
+        time.sleep_ms(100)   
+
+        if buttons_a.left and hrac_X > 0:
+            hrac_do_leva()
+
+        if buttons_a.right and hrac_X < 9:
+            hrac_do_prava()
+        
+        pohyb_enemaka()
+        if enemak_X == strela_X :
+            d = 0
+            c = 0
+            for i in range(9):
+                d += 1
+                if strela_X - d > -1 :
+                    display.set_pixel(strela_X - d + 1, c, "black")
+                    display.set_pixel(strela_X - d, c, "red")
+                if strela_X + d < 10 :
+                    display.set_pixel(strela_X + d - 1, c, "black")
+                    display.set_pixel(strela_X + d, c, "red")
+                i = i + 1
+                time.sleep_ms(200)
+            display.set_pixel(0, c, "black")
+            display.set_pixel(9, c, "black")
+            prohra()
+            return()
+
+
+
+def strileni_enemaka() :
+    x = enemak_X
+    y = 9
+    for y in range(10):
+        display.set_pixel(x, y, "red")
+        display.set_pixel(enemak_X, 0, "orange")
+        display.set_pixel(hrac_X, hrac_Y, "green")
+        time.sleep_ms(100)
+        if buttons_a.left and hrac_X > 0:
+            hrac_do_leva()
+        if buttons_a.right and hrac_X < 9:
+            hrac_do_prava() 
+        display.set_pixel(x, y, "black")       
+
+    if enemak_X == hrac_X and y == 9 :
+        c = 9
+        d = 0
+        for i in range(9):
+            d += 1
+            if x - d > -1 :
+                display.set_pixel(x - d + 1, c, "black")
+                display.set_pixel(x - d, c, "red")
+            if x + d < 10 :
+                display.set_pixel(x + d - 1, c, "black")
+                display.set_pixel(x + d, c, "red")
+            i = i + 1
+            time.sleep_ms(200)
+        display.set_pixel(0, c, "black")
+        display.set_pixel(9, c, "black")
+        prohra()
+
+def pohyb_enemaka():
+    global enemak_X
+    g = [-1, 0, 0, 0, 0, 0, 0, 1]
+    e = g[random.randint(0,7)]
+    if enemak_X == 0 and e == -1:
+        display.set_pixel(enemak_X, 0, "orange")
+    elif enemak_X == 9 and e == 1:
+        display.set_pixel(enemak_X, 0, "orange")
     else :
-        display.set_pixel(f, 0, "black")
-        f = f + e
-        display.set_pixel(f, 0, "orange")
+        display.set_pixel(enemak_X, 0, "black")
+        enemak_X = enemak_X + e
+        display.set_pixel(enemak_X, 0, "orange")
         time.sleep_ms(100)
-    p = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
-    if p[random.randint(0, 10)] == 1:
-        x = f
-        y = 9
-        for y in range(10):
-            display.set_pixel(x, y, "red")
-            display.set_pixel(f, 0, "orange")
-            display.set_pixel(a, b, "green")
-            time.sleep_ms(100)
-            if f == a and y == 9 :
-                c = 0
-                d = 0
-                for d in range(10):
-                    for c in range(10):
-                        display.set_pixel(c, d, "white")
-                time.sleep_ms(1000)
-                display.clear()
-            if buttons_a.left and a > 0:
-                time.sleep_ms(100)
-                display.set_pixel(a, b, "black")
-                a = a - 1
-                display.set_pixel(a, b, "green")
-            if buttons_a.right and a < 9:
-                time.sleep_ms(100)
-                display.set_pixel(a, b, "black")
-                a = a + 1
-                display.set_pixel(a, b, "green")
-            if buttons_a.enter:
-                x = a
-                y = b
-                for y in range(10):
-                    display.set_pixel(x, 9-y, "red")
-                    display.set_pixel(a, b, "green")
-                    time.sleep_ms(100)
-                    g = [-1, 0, 0, 0, 1]
-                    e = g[random.randint(0,4)]
-                    if f == 0 and e == -1:
-                        display.set_pixel(f, 0, "orange")
-                    elif f == 9 and e == 1:
-                        display.set_pixel(f, 0, "orange")
-                    else :
-                        display.set_pixel(f, 0, "black")
-                        f = f + e
-                        display.set_pixel(f, 0, "orange")
-                        time.sleep_ms(100)
 
-                    if buttons_a.left and a > 0:
-                        time.sleep_ms(100)
-                        display.set_pixel(a, b, "black")
-                        a = a - 1
-                        display.set_pixel(a, b, "green")
-                    if buttons_a.right and a < 9:
-                        time.sleep_ms(100)
-                        display.set_pixel(a, b, "black")
-                        a = a + 1
-                        display.set_pixel(a, b, "green")
+def enemak_smrt() :
+    global strela_Y
+    global strela_X
+    global enemak_X
+    if strela_X == enemak_X and strela_Y == 9 :
+        print("ahoj")
+        d = 0
+        c = 0
+        for i in range(9):
+            d += 1
+            if strela_X - d > -1 :
+                display.set_pixel(strela_X - d + 1, c, "black")
+                display.set_pixel(strela_X - d, c, "red")
+            if strela_X + d < 10 :
+                display.set_pixel(strela_X + d - 1, c, "black")
+                display.set_pixel(strela_X + d, c, "red")
+            i = i + 1
+            time.sleep_ms(200)
+        display.set_pixel(0, c, "black")
+        display.set_pixel(9, c, "black")
+        prohra()
 
-                    display.set_pixel(x, 9-y, "black")
 
-                    if x == f and y == 9 :
-                        c = 0
-                        d = 0
-                        for d in range(10):
-                            for c in range(10):
-                                display.set_pixel(c, d, "white")
-                        time.sleep_ms(1000)
-                        display.clear()
-            display.set_pixel(x, y, "black")
-    if buttons_a.left and a > 0:
-        time.sleep_ms(100)
-        display.set_pixel(a, b, "black")
-        a = a - 1
-        display.set_pixel(a, b, "green")
-    if buttons_a.right and a < 9:
-        time.sleep_ms(100)
-        display.set_pixel(a, b, "black")
-        a = a + 1
-        display.set_pixel(a, b, "green")
+def prohra() :
+    while True :
+        if buttons_a.enter :
+            display.clear()
+            return ()
+
+while True:
+    if buttons_a.left and hrac_X > 0:
+        hrac_do_leva()
+
+    if buttons_a.right and hrac_X < 9:
+       hrac_do_prava()+
+       
 
     if buttons_a.enter:
-        x = a
-        y = b
-        for y in range(10):
-            display.set_pixel(x, 9-y, "red")
-            display.set_pixel(a, b, "green")
-            time.sleep_ms(100)
-            g = [-1, 0, 0, 0, 1]
-            e = g[random.randint(0,4)]
-            if f == 0 and e == -1:
-                display.set_pixel(f, 0, "orange")
-            elif f == 9 and e == 1:
-                display.set_pixel(f, 0, "orange")
-            else :
-                display.set_pixel(f, 0, "black")
-                f = f + e
-                display.set_pixel(f, 0, "orange")
-                time.sleep_ms(100)
-
-            if buttons_a.left and a > 0:
-                time.sleep_ms(100)
-                display.set_pixel(a, b, "black")
-                a = a - 1
-                display.set_pixel(a, b, "green")
-            if buttons_a.right and a < 9:
-                time.sleep_ms(100)
-                display.set_pixel(a, b, "black")
-                a = a + 1
-                display.set_pixel(a, b, "green")
-            if p[random.randint(0, 10)] == 1:
-                x = f
-                y = 9
-                for y in range(10):
-                        display.set_pixel(x, y, "red")
-                        display.set_pixel(f, 0, "orange")
-                        display.set_pixel(a, b, "green")
-                        time.sleep_ms(100)
-                        if f == a and y == 9 :
-                            c = 0
-                            d = 0
-                            for d in range(10):
-                                for c in range(10):
-                                    display.set_pixel(c, d, "white")
-                            time.sleep_ms(1000)
-                            display.clear()
-            display.set_pixel(x, y, "black")
-            display.set_pixel(x, 9-y, "black")
-            if x == f and y == 9 :
-                c = 0
-                d = 0
-                for d in range(10):
-                    for c in range(10):
-                        display.set_pixel(c, d, "white")
-                time.sleep_ms(1000)
-                display.clear()
-
+        hrac_vystrel()
+    
     if buttons_b.enter:
-        c = 0
-        d = 0
-        for d in range(10):
-            for c in range(10):
-                display.set_pixel(c, d, "white")
-        time.sleep_ms(1000)
-        display.clear()
+        flashbang()
+
+    pohyb_enemaka()
+
+    p = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+    if p[random.randint(0, 10)] == 1:
+        strileni_enemaka()
+    
+    if buttons_b.up :
+        laser()
 
 
 #
