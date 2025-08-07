@@ -36,7 +36,7 @@ enemak_X = 5
 strela1_Y = 9
 strela1_X = 5
 
-def hrac_do_leva() :
+def hrac1_do_leva() :
     global hrac1_X
     time.sleep_ms(100)
     display.set_pixel(hrac1_X, hrac1_Y, "black")
@@ -44,7 +44,7 @@ def hrac_do_leva() :
     display.set_pixel(hrac1_X, hrac1_Y, "green")
     return
 
-def hrac_do_prava() :
+def hrac1_do_prava() :
     global hrac1_X
     time.sleep_ms(100)
     display.set_pixel(hrac1_X, hrac1_Y, "black")
@@ -52,7 +52,7 @@ def hrac_do_prava() :
     display.set_pixel(hrac1_X, hrac1_Y, "green")
     return
 
-def hrac_vystrel() :
+def hrac1_vystrel() :
     global strela1_X
     global strela1_Y
     strela1_Y = hrac1_Y
@@ -63,10 +63,10 @@ def hrac_vystrel() :
         time.sleep_ms(100)   
 
         if buttons_a.left and hrac1_X > 0:
-            hrac_do_leva()
+            hrac1_do_leva()
 
         if buttons_a.right and hrac1_X < 9:
-            hrac_do_prava()
+            hrac1_do_prava()
 
         p = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
         if p[random.randint(0, 10)] == 1:
@@ -108,10 +108,10 @@ def laser() :
         time.sleep_ms(100)   
 
         if buttons_a.left and hrac1_X > 0:
-            hrac_do_leva()
+            hrac1_do_leva()
 
         if buttons_a.right and hrac1_X < 9:
-            hrac_do_prava()
+            hrac1_do_prava()
 
         pohyb_enemaka()
     
@@ -123,10 +123,10 @@ def laser() :
         time.sleep_ms(100)   
 
         if buttons_a.left and hrac1_X > 0:
-            hrac_do_leva()
+            hrac1_do_leva()
 
         if buttons_a.right and hrac1_X < 9:
-            hrac_do_prava()
+            hrac1_do_prava()
         
         pohyb_enemaka()
 
@@ -168,22 +168,22 @@ def strileni_soucasne() :
         if enemak_strela_Y < 9 :
             enemak_strela_Y += 1
             display.set_pixel(enemak_strela_X, enemak_strela_Y, "red")
-            hrac_smrt()
+            hrac1_smrt()
         
         display.set_pixel(hrac1_X, hrac1_Y, "green")
         display.set_pixel(enemak_X, 0, "orange")
 
         if buttons_a.left and hrac1_X > 0:
-            hrac_do_leva()
+            hrac1_do_leva()
 
         if buttons_a.right and hrac1_X < 9:
-            hrac_do_prava()
+            hrac1_do_prava()
         
         if buttons_a.left and hrac1_X > 0:
-            hrac_do_leva()
+            hrac1_do_leva()
 
         if buttons_a.right and hrac1_X < 9:
-            hrac_do_prava()
+            hrac1_do_prava()
 
         pohyb_enemaka()
 
@@ -208,9 +208,9 @@ def strileni_enemaka() :
         time.sleep_ms(100)
 
         if buttons_a.left and hrac1_X > 0:
-            hrac_do_leva()
+            hrac1_do_leva()
         if buttons_a.right and hrac1_X < 9:
-            hrac_do_prava() 
+            hrac1_do_prava() 
 
         pohyb_enemaka()
         display.set_pixel(enemak_strela_X, enemak_strela_Y, "black")
@@ -222,14 +222,14 @@ def strileni_enemaka() :
             enemak_strela_Y = 0
             strela1_Y = 1
             return ()
-        hrac_smrt()
+        hrac1_smrt()
 
     enemak_strela_Y = 0
 
 
 
        
-def hrac_smrt() :
+def hrac1_smrt() :
     global enemak_strela_X
     global enemak_strela_Y
     global hrac1_X
@@ -295,13 +295,13 @@ def prohra() :
 
 while True:
     if buttons_a.left and hrac1_X > 0:
-        hrac_do_leva()
+        hrac1_do_leva()
 
     if buttons_a.right and hrac1_X < 9:
-       hrac_do_prava()     
+       hrac1_do_prava()     
 
     if buttons_a.enter:
-        hrac_vystrel()
+        hrac1_vystrel()
     
     if buttons_b.enter:
         flashbang()
