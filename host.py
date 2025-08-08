@@ -1,249 +1,224 @@
+from game_logic import GameState
 import network
 import socket
 import ujson
 import time
 import random
-from logic import *
-# --- Konfigurace Wi-Fi ---
-WIFI_SSID = "ESP-AP"
-WIFI_PASS = "protabulesa"
-SERVER_PORT = 1234
-SOCKET_TIMEOUT_S = 5
 
-# --- Síťová inicializace (AP) ---
-ap = network.WLAN(network.AP_IF)
-ap.active(True)
-ap.config(essid=WIFI_SSID, password=WIFI_PASS, authmode=network.AUTH_WPA2_PSK)
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(('', SERVER_PORT))
-s.listen(1)
-print(f"Server running! | IP: {ap.ifconfig()[0]}")
-
-# --- Herní proměnné (původní logika) ---
-hrac_X = 5
-hrac_Y = 9
-enemak_X = 5
-strela_X = None
-strela_Y = None
-# ... další proměnné dle původního emzáci.py ...
-
-# --- Hlavní smyčka ---
-while True:
-    print("Waiting for a connection...")
-    conn, addr = s.accept()
-    conn.settimeout(SOCKET_TIMEOUT_S)
-    print(f"Client connected from: {addr}")
-    try:
-        while True:
-            # --- 1. Synchronizace: přijmi stav od klienta ---
-            try:
-                line = conn.readline()
-                if not line:
-                    print("Client disconnected.")
+class MultiplayerHost:
+    def __init__(self, display, buttons_a, buttons_b):
+        self.display = display
+        self.buttons_a = buttons_a
+        self.buttons_b = buttons_b
+        self.game_state = GameState()
+        self.game_state.set_display(display)
+        
+        # Network setup
+        self.ap = network.WLAN(network.AP_IF)
+        self.ap.active(True)
+        self.ap.config(essid="ESP-AP", password="protabulesa", authmode=network.AUTH_WPA2_PSK)
+        
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind(('', 1234))
+        self.socket.listen(1)
+        
+        print(f"Server running! | IP: {self.ap.ifconfig()[0]}")
+        
+    def clear_display(self):
+        """Clear the entire display"""
+        self.display.clear()
+        
+    def draw_game_state(self):
+        """Draw the current game state on display"""
+        self.clear_display()
+        
+        # Draw players
+        for player, data in self.game_state.players.items():
+            if data['alive']:
+                color = "green" if player == 'host' else "blue"
+                self.display.set_pixel(data['x'], data['y'], color)
+                
+        # Draw enemy
+        if self.game_state.enemy['alive']:
+            self.display.set_pixel(self.game_state.enemy['x'], 0, "orange")
+            
+        # Draw shots
+        for shot in self.game_state.active_shots:
+            if shot.active:
+                if shot.owner == 'host':
+                    color = "red"
+                elif shot.owner == 'client':
+                    color = "yellow"
+                else:  # enemy
+                    color = "purple"
+                self.display.set_pixel(shot.x, shot.y, color)
+                
+        # Draw shot counters
+        self.draw_shot_counters()
+        
+    def draw_shot_counters(self):
+        """Draw shot counters for both players"""
+        # Host shots (left side)
+        for i in range(self.game_state.players['host']['shots_remaining']):
+            if i < 5:
+                self.display.set_pixel(i, 9, "green")
+                
+        # Client shots (right side)
+        for i in range(self.game_state.players['client']['shots_remaining']):
+            if i < 5:
+                self.display.set_pixel(9-i, 9, "blue")
+                
+    def handle_input(self):
+        """Handle local player input"""
+        if self.buttons_a.left:
+            self.game_state.move_player('host', 'left')
+        if self.buttons_a.right:
+            self.game_state.move_player('host', 'right')
+        if self.buttons_a.enter:
+            self.game_state.player_shoot('host')
+        if self.buttons_b.enter:
+            self.flashbang()
+        if self.buttons_b.up:
+            self.laser()
+            
+    def flashbang(self):
+        """Flashbang effect"""
+        for y in range(10):
+            for x in range(10):
+                self.display.set_pixel(x, y, "white")
+        time.sleep_ms(1000)
+        self.game_state.flashbang = True
+        
+    def laser(self):
+        """Laser weapon - shoots multiple shots"""
+        if self.game_state.players['host']['shots_remaining'] < 3:
+            return
+            
+        # Create multiple shots in a line
+        for dx in [-1, 0, 1]:
+            x = self.game_state.players['host']['x'] + dx
+            if 0 <= x <= 9:
+                new_shot = Shot(x, self.game_state.players['host']['y'] - 1, -1, 'host')
+                self.game_state.active_shots.append(new_shot)
+                
+        self.game_state.players['host']['shots_remaining'] -= 3
+        
+    def update_game(self):
+        """Update game state"""
+        # Move enemy
+        self.game_state.move_enemy()
+        
+        # Enemy shooting
+        self.game_state.enemy_shoot()
+        
+        # Update all shots
+        self.game_state.update_shots()
+        
+        # Check for game over conditions
+        alive_players = sum(1 for player in self.game_state.players.values() if player['alive'])
+        if alive_players == 0:
+            return "game_over"
+        elif not self.game_state.enemy['alive']:
+            return "victory"
+            
+        return "continue"
+        
+    def run_game(self):
+        """Main game loop"""
+        print("Waiting for client connection...")
+        conn, addr = self.socket.accept()
+        conn.settimeout(5.0)
+        print(f"Client connected from: {addr}")
+        
+        try:
+            while True:
+                # Handle local input
+                self.handle_input()
+                
+                # Update game state
+                game_status = self.update_game()
+                
+                # Send game state to client
+                game_data = self.game_state.to_dict()
+                game_data['game_status'] = game_status
+                
+                try:
+                    serialized_data = ujson.dumps(game_data) + '\n'
+                    conn.sendall(serialized_data.encode('utf-8'))
+                except Exception as e:
+                    print(f"Error sending data: {e}")
                     break
-                client_state = ujson.loads(line)
-                # Zde načti proměnné od klienta
-                hrac2_X = client_state.get('hrac_X', 5)
-                hrac2_Y = client_state.get('hrac_Y', 0)
-                # ... další proměnné ...
-            except Exception as e:
-                print(f"Chyba při čtení od klienta: {e}")
-
-            # --- Trvalé rozsvícení červeného pixelu na pozici druhého hráče ---
-            display.set_pixel(hrac2_X, hrac2_Y, "red")
-
-            # --- 2. Herní logika (původní kód z emzáci.py) ---
-            from logic import *
-            import random
-            import time
-            # Původní proměnné už jsou nahoře
-            def hrac_do_leva() :
-                global hrac_X
+                    
+                # Receive client input
+                try:
+                    line = conn.readline()
+                    if not line:
+                        print("Client disconnected")
+                        break
+                        
+                    client_data = ujson.loads(line)
+                    self.handle_client_input(client_data)
+                    
+                except Exception as e:
+                    print(f"Error receiving client data: {e}")
+                    
+                # Draw game state
+                self.draw_game_state()
+                
+                # Handle game status
+                if game_status == "game_over":
+                    self.show_game_over("DEFEAT")
+                    break
+                elif game_status == "victory":
+                    self.show_game_over("VICTORY")
+                    break
+                    
                 time.sleep_ms(100)
-                display.set_pixel(hrac_X, hrac_Y, "black")
-                hrac_X = hrac_X - 1
-                display.set_pixel(hrac_X, hrac_Y, "green")
-                return
-
-            def hrac_do_prava() :
-                global hrac_X
-                time.sleep_ms(100)
-                display.set_pixel(hrac_X, hrac_Y, "black")
-                hrac_X = hrac_X + 1
-                display.set_pixel(hrac_X, hrac_Y, "green")
-                return
-
-            def hrac_vystrel() :
-                global strela_X
-                global strela_Y
-                strela_X = hrac_X
-                strela_Y = hrac_Y
-                for strela_Y in range(10):
-                    display.set_pixel(strela_X, 9-strela_Y, "red")
-                    display.set_pixel(hrac_X, hrac_Y, "green")
-                    time.sleep_ms(100)
-                    if buttons_a.left and hrac_X > 0:
-                        hrac_do_leva()
-                    if buttons_a.right and hrac_X < 9:
-                        hrac_do_prava()
-                    pohyb_enemaka()
-                    enemak_smrt()
-                    display.set_pixel(strela_X, 9-strela_Y, "black")
-
-            def flashbang() :
-                c = 0
-                d = 0
-                for d in range(10):
-                    for c in range(10):
-                        display.set_pixel(c, d, "white")
-                time.sleep_ms(1000)
-                display.clear()
-
-            def laser() :
-                global strela_X
-                global strela_Y
-                strela_X = hrac_X
-                strela_Y = hrac_Y
-                for strela_Y in range(10):
-                    display.set_pixel(strela_X, 9-strela_Y, "red")
-                    display.set_pixel(hrac_X, hrac_Y, "green")
-                    time.sleep_ms(100)
-                    if buttons_a.left and hrac_X > 0:
-                        hrac_do_leva()
-                    if buttons_a.right and hrac_X < 9:
-                        hrac_do_prava()
-                    pohyb_enemaka()
-                    enemak_smrt()
-                for strela_Y in range(10):
-                    display.set_pixel(strela_X, 9-strela_Y, "black")
-                    display.set_pixel(hrac_X, hrac_Y, "green")
-                    time.sleep_ms(100)
-                    if buttons_a.left and hrac_X > 0:
-                        hrac_do_leva()
-                    if buttons_a.right and hrac_X < 9:
-                        hrac_do_prava()
-                    pohyb_enemaka()
-                    if enemak_X == strela_X :
-                        d = 0
-                        c = 0
-                        for i in range(9):
-                            d += 1
-                            if strela_X - d > -1 :
-                                display.set_pixel(strela_X - d + 1, c, "black")
-                                display.set_pixel(strela_X - d, c, "red")
-                            if strela_X + d < 10 :
-                                display.set_pixel(strela_X + d - 1, c, "black")
-                                display.set_pixel(strela_X + d, c, "red")
-                            i = i + 1
-                            time.sleep_ms(200)
-                        display.set_pixel(0, c, "black")
-                        display.set_pixel(9, c, "black")
-                        prohra()
-                        return()
-
-            def strileni_enemaka() :
-                x = enemak_X
-                y = 9
-                for y in range(10):
-                    display.set_pixel(x, y, "red")
-                    display.set_pixel(enemak_X, 0, "orange")
-                    display.set_pixel(hrac_X, hrac_Y, "green")
-                    time.sleep_ms(100)
-                    if buttons_a.left and hrac_X > 0:
-                        hrac_do_leva()
-                    if buttons_a.right and hrac_X < 9:
-                        hrac_do_prava()
-                    display.set_pixel(x, y, "black")
-                if enemak_X == hrac_X and y == 9 :
-                    c = 9
-                    d = 0
-                    for i in range(9):
-                        d += 1
-                        if x - d > -1 :
-                            display.set_pixel(x - d + 1, c, "black")
-                            display.set_pixel(x - d, c, "red")
-                        if x + d < 10 :
-                            display.set_pixel(x + d - 1, c, "black")
-                            display.set_pixel(x + d, c, "red")
-                        i = i + 1
-                        time.sleep_ms(200)
-                    display.set_pixel(0, c, "black")
-                    display.set_pixel(9, c, "black")
-                    prohra()
-
-            def pohyb_enemaka():
-                global enemak_X
-                g = [-1, 0, 0, 0, 0, 0, 0, 1]
-                e = g[random.randint(0,7)]
-                if enemak_X == 0 and e == -1:
-                    display.set_pixel(enemak_X, 0, "orange")
-                elif enemak_X == 9 and e == 1:
-                    display.set_pixel(enemak_X, 0, "orange")
-                else :
-                    display.set_pixel(enemak_X, 0, "black")
-                    enemak_X = enemak_X + e
-                    display.set_pixel(enemak_X, 0, "orange")
-                    time.sleep_ms(100)
-
-            def enemak_smrt() :
-                global strela_Y
-                global strela_X
-                global enemak_X
-                if strela_X == enemak_X and strela_Y == 9 :
-                    print("ahoj")
-                    d = 0
-                    c = 0
-                    for i in range(9):
-                        d += 1
-                        if strela_X - d > -1 :
-                            display.set_pixel(strela_X - d + 1, c, "black")
-                            display.set_pixel(strela_X - d, c, "red")
-                        if strela_X + d < 10 :
-                            display.set_pixel(strela_X + d - 1, c, "black")
-                            display.set_pixel(strela_X + d, c, "red")
-                        i = i + 1
-                        time.sleep_ms(200)
-                    display.set_pixel(0, c, "black")
-                    display.set_pixel(9, c, "black")
-                    prohra()
-
-            def prohra() :
-                while True :
-                    if buttons_a.enter :
-                        display.clear()
-                        return ()
-
-            # Hlavní smyčka hry
-            if buttons_a.left and hrac_X > 0:
-                hrac_do_leva()
-            if buttons_a.right and hrac_X < 9:
-                hrac_do_prava()
-            if buttons_a.enter:
-                hrac_vystrel()
-            if buttons_b.enter:
-                flashbang()
-            pohyb_enemaka()
-            p = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
-            if p[random.randint(0, 10)] == 1:
-                strileni_enemaka()
-            if buttons_b.up :
-                laser()
-
-            # --- 3. Synchronizace: odešli stav hostitele klientovi ---
-            state_to_send = {
-                'hrac_X': hrac_X,
-                'hrac_Y': hrac_Y,
-                'enemak_X': enemak_X,
-                'strela_X': strela_X,
-                'strela_Y': strela_Y,
-                # ... další proměnné ...
-            }
-            try:
-                conn.sendall((ujson.dumps(state_to_send) + '\n').encode('utf-8'))
-            except Exception as e:
-                print(f"Chyba při odesílání klientovi: {e}")
-            time.sleep(0.05)
-    finally:
-        conn.close()
-        print("Connection closed.")
-# ... zbytek původního kódu zůstává ...
+                
+        except Exception as e:
+            print(f"Game error: {e}")
+        finally:
+            conn.close()
+            print("Connection closed")
+            
+    def handle_client_input(self, client_data):
+        """Handle input from client"""
+        if 'action' in client_data:
+            action = client_data['action']
+            if action == 'move_left':
+                self.game_state.move_player('client', 'left')
+            elif action == 'move_right':
+                self.game_state.move_player('client', 'right')
+            elif action == 'shoot':
+                self.game_state.player_shoot('client')
+            elif action == 'flashbang':
+                self.game_state.flashbang = True
+            elif action == 'laser':
+                # Client laser (similar to host)
+                if self.game_state.players['client']['shots_remaining'] < 3:
+                    return
+                for dx in [-1, 0, 1]:
+                    x = self.game_state.players['client']['x'] + dx
+                    if 0 <= x <= 9:
+                        new_shot = Shot(x, self.game_state.players['client']['y'] + 1, 1, 'client')
+                        self.game_state.active_shots.append(new_shot)
+                self.game_state.players['client']['shots_remaining'] -= 3
+                
+    def show_game_over(self, message):
+        """Show game over screen"""
+        self.clear_display()
+        
+        # Simple text display
+        if message == "VICTORY":
+            pixels = [(3, 4), (4, 4), (5, 4), (6, 4)]  # WIN
+        else:
+            pixels = [(2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4)]  # DEFEAT
+            
+        for x, y in pixels:
+            self.display.set_pixel(x, y, "red")
+            
+        time.sleep_ms(3000)
+        
+# Example usage:
+# host = MultiplayerHost(display, buttons_a, buttons_b)
+# host.run_game()
