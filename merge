@@ -1,212 +1,158 @@
 from logic import *
-import random
 import time
+import random
 
-# Počáteční pozice hráče a nepřítele
-hrac1_X = 5
-hrac1_Y = 9
-enemak_X = 5
-enemak_Y = 0  # nepřítel je nahoře (řádek 0)
+# Hráči
+hrac1_X = 0
+hrac1_Y = 5
+hrac2_X = 9
+hrac2_Y = 5
+zivoty_hrac1 = 3
+zivoty_hrac2 = 3
 
-zivoty = 3
-zivoty_enemak = 3
+# Střely
+strely_hrac1 = []
+strely_hrac2 = []
 
-flashbang_naboje = 0
-laser_naboje = 0
+# Power-upy
+powerupy = []  # každý powerup = {"x": x, "y": y, "typ": "laser" nebo "rapid"}
 
-# Seznamy pro více střel
-strely_hrace = []   # střely hráče (letí nahoru)
-strely_enemaka = [] # střely nepřítele (letí dolů)
+# Aktivní bonusy
+bonusy_hrac1 = {"laser": False, "rapid": False}
+bonusy_hrac2 = {"laser": False, "rapid": False}
 
-# Nastav počáteční životy na statusu
-for i in range(zivoty):
-    display.status.set_pixel(i, "red")
+# Powerup barvy
+barvy_powerupu = {"laser": "purple", "rapid": "blue"}
 
-def hrac1_do_leva():
-    global hrac1_X
-    if hrac1_X > 0:
-        display.set_pixel(hrac1_X, hrac1_Y, "black")
-        hrac1_X -= 1
-        display.set_pixel(hrac1_X, hrac1_Y, "green")
+def vykresli_hrace():
+    display.set_pixel(hrac1_X, hrac1_Y, "green")
+    display.set_pixel(hrac2_X, hrac2_Y, "orange")
 
-def hrac1_do_prava():
-    global hrac1_X
-    if hrac1_X < 9:
-        display.set_pixel(hrac1_X, hrac1_Y, "black")
-        hrac1_X += 1
-        display.set_pixel(hrac1_X, hrac1_Y, "green")
+def pohyb_hracu():
+    global hrac1_Y, hrac2_Y
+    display.set_pixel(hrac1_X, hrac1_Y, "black")
+    display.set_pixel(hrac2_X, hrac2_Y, "black")
 
-def vystrel_hrac():
-    global strely_hrace, hrac1_X, hrac1_Y
-    # Přidej novou střelu přímo nad hráče
-    strely_hrace.append({"x": hrac1_X, "y": hrac1_Y - 1})
+    if buttons_a.up and hrac1_Y > 0:
+        hrac1_Y -= 1
+    elif buttons_a.down and hrac1_Y < 9:
+        hrac1_Y += 1
 
-def vystrel_enemak():
-    global strely_enemaka, enemak_X, enemak_Y
-    # Přidej novou střelu přímo pod nepřítele (řádek 1)
-    strely_enemaka.append({"x": enemak_X, "y": enemak_Y + 1})
+    if buttons_b.up and hrac2_Y > 0:
+        hrac2_Y -= 1
+    elif buttons_b.down and hrac2_Y < 9:
+        hrac2_Y += 1
 
-def pohyb_strel_hrace():
-    global strely_hrace, enemak_X, enemak_Y, zivoty_enemak
-    nove_strely = []
-    for strela in strely_hrace:
-        # Smaž starou pozici
-        display.set_pixel(strela["x"], strela["y"], "black")
-        # Posun střely nahoru
-        strela["y"] -= 1
-        if strela["y"] < 0:
-            # Střela mimo displej, zahoď ji
+    vykresli_hrace()
+
+def vystrel_hrace(strely, hrac_X, hrac_Y, bonusy, smer):
+    if bonusy["rapid"] or len(strely) < 3:
+        typ = "laser" if bonusy["laser"] else "normal"
+        if smer == "right":
+            strely.append([hrac_X + 1, hrac_Y, typ])
+        else:
+            strely.append([hrac_X - 1, hrac_Y, typ])
+
+def pohyb_strel():
+    global strely_hrac1, strely_hrac2, zivoty_hrac1, zivoty_hrac2
+
+    # Vymaž staré střely
+    for s in strely_hrac1 + strely_hrac2:
+        display.set_pixel(s[0], s[1], "black")
+
+    nove_strely_hrac1 = []
+    nove_strely_hrac2 = []
+
+    # Posuň a vyhodnoť střely hráče 1
+    for s in strely_hrac1:
+        s[0] += 1
+        if s[0] > 9:
             continue
+        elif s[0] == hrac2_X and s[1] == hrac2_Y:
+            if s[2] != "laser":
+                continue
+            zivoty_hrac2 -= 1
+        elif any(p["x"] == s[0] and p["y"] == s[1] for p in powerupy):
+            aktivuj_powerup(2, s[0], s[1])
+        elif not kolize_strel(s, strely_hrac2):
+            nove_strely_hrac1.append(s)
 
-        # Kontrola zásahu nepřítele
-        if strela["x"] == enemak_X and strela["y"] == enemak_Y:
-            zivoty_enemak -= 1
-            nabyt_flashbang()
-            nabyt_laser()
-            # Animace zásahu nepřítele
-            for i in range(3):
-                display.set_pixel(enemak_X, enemak_Y, "red")
-                time.sleep_ms(100)
-                display.set_pixel(enemak_X, enemak_Y, "black")
-                time.sleep_ms(100)
-            # Reset pozice nepřítele a životů pokud zemřel
-            if zivoty_enemak <= 0:
-                prohra()
-                zivoty_enemak = 3
-            continue  # střela zmizí po zásahu
-
-        # Vykresli novou pozici střely
-        display.set_pixel(strela["x"], strela["y"], "red")
-        nove_strely.append(strela)
-    strely_hrace = nove_strely
-
-def pohyb_strel_enemaka():
-    global strely_enemaka, hrac1_X, hrac1_Y, zivoty
-    nove_strely = []
-    for strela in strely_enemaka:
-        display.set_pixel(strela["x"], strela["y"], "black")
-        strela["y"] += 1
-        if strela["y"] > 9:
+    # Posuň a vyhodnoť střely hráče 2
+    for s in strely_hrac2:
+        s[0] -= 1
+        if s[0] < 0:
             continue
+        elif s[0] == hrac1_X and s[1] == hrac1_Y:
+            if s[2] != "laser":
+                continue
+            zivoty_hrac1 -= 1
+        elif any(p["x"] == s[0] and p["y"] == s[1] for p in powerupy):
+            aktivuj_powerup(1, s[0], s[1])
+        elif not kolize_strel(s, strely_hrac1):
+            nove_strely_hrac2.append(s)
 
-        # Kontrola zásahu hráče
-        if strela["x"] == hrac1_X and strela["y"] == hrac1_Y:
-            zivoty -= 1
-            # Animace zásahu hráče
-            for i in range(3):
-                display.set_pixel(hrac1_X, hrac1_Y, "yellow")
-                time.sleep_ms(100)
-                display.set_pixel(hrac1_X, hrac1_Y, "green")
-                time.sleep_ms(100)
-            # Update životů na statusu
-            if zivoty >= 0:
-                display.status.set_pixel(zivoty, "black")
-            if zivoty <= 0:
-                prohra()
-            continue  # střela zmizí po zásahu
+    strely_hrac1 = nove_strely_hrac1
+    strely_hrac2 = nove_strely_hrac2
 
-        display.set_pixel(strela["x"], strela["y"], "orange")
-        nove_strely.append(strela)
-    strely_enemaka = nove_strely
+    # Vykresli nové střely
+    for s in strely_hrac1:
+        display.set_pixel(s[0], s[1], "red" if s[2] == "normal" else "red")
+    for s in strely_hrac2:
+        display.set_pixel(s[0], s[1], "green" if s[2] == "normal" else "green")
 
-def pohyb_enemaka():
-    global enemak_X
-    g = [-1, 0, 0, 0, 0, 0, 0, 1]
-    e = g[random.randint(0,7)]
-    if enemak_X == 0 and e == -1:
-        # nepřítel nemůže jít dál vlevo
-        display.set_pixel(enemak_X, 0, "orange")
-    elif enemak_X == 9 and e == 1:
-        # nepřítel nemůže jít dál vpravo
-        display.set_pixel(enemak_X, 0, "orange")
-    else:
-        display.set_pixel(enemak_X, 0, "black")
-        enemak_X = enemak_X + e
-        display.set_pixel(enemak_X, 0, "orange")
+def kolize_strel(s, druhe_strely):
+    for ds in druhe_strely:
+        if s[0] == ds[0] and s[1] == ds[1]:
+            druhe_strely.remove(ds)
+            return True
+    return False
 
-def nabyt_flashbang():
-    global flashbang_naboje
-    if flashbang_naboje == 0:
-        flashbang_naboje = 1
-        display.status.set_pixel(3, "white")
+def spawn_powerup():
+    if random.randint(0, 30) == 1:
+        typ = random.choice(["laser", "rapid"])
+        x = random.randint(3, 6)
+        y = random.randint(0, 9)
+        powerupy.append({"x": x, "y": y, "typ": typ})
 
-def flashbang():
-    global flashbang_naboje
-    if flashbang_naboje > 0:
-        flashbang_naboje -= 1
-        display.status.set_pixel(3, "black")
-        for y in range(10):
-            for x in range(10):
-                display.set_pixel(x, y, "white")
-        time.sleep_ms(1000)
+def vykresli_powerupy():
+    for p in powerupy:
+        display.set_pixel(p["x"], p["y"], barvy_powerupu[p["typ"]])
+
+def aktivuj_powerup(hrac, x, y):
+    global powerupy
+    for p in powerupy:
+        if p["x"] == x and p["y"] == y:
+            if hrac == 1:
+                bonusy_hrac1[p["typ"]] = True
+            else:
+                bonusy_hrac2[p["typ"]] = True
+            powerupy.remove(p)
+            break
+
+def zkontroluj_konec():
+    if zivoty_hrac1 <= 0:
         display.clear()
-        # Po flashbangu vykresli hráče a nepřítele znova
-        display.set_pixel(hrac1_X, hrac1_Y, "green")
-        display.set_pixel(enemak_X, enemak_Y, "orange")
-
-def nabyt_laser():
-    global laser_naboje
-    if laser_naboje == 0:
-        laser_naboje = 1
-        display.status.set_pixel(4, "purple")
-
-def prohra():
-    display.clear()
-    # zobraz "prohra" blikáním
-    for _ in range(5):
-        display.show(Image.SKULL)
-        time.sleep_ms(300)
+        display.show("Hráč 2 vyhrál", 1000)
+        while True: pass
+    elif zivoty_hrac2 <= 0:
         display.clear()
-        time.sleep_ms(300)
-    # restart hry
-    reset_hry()
+        display.show("Hráč 1 vyhrál", 1000)
+        while True: pass
 
-def reset_hry():
-    global zivoty, zivoty_enemak, hrac1_X, enemak_X, strely_hrace, strely_enemaka
-    zivoty = 3
-    zivoty_enemak = 3
-    hrac1_X = 5
-    enemak_X = 5
-    strely_hrace = []
-    strely_enemaka = []
-    display.clear()
-    for i in range(zivoty):
-        display.status.set_pixel(i, "red")
-    display.set_pixel(hrac1_X, 9, "green")
-    display.set_pixel(enemak_X, 0, "orange")
-
-# Inicializace displeje
-display.clear()
-display.set_pixel(hrac1_X, hrac1_Y, "green")
-display.set_pixel(enemak_X, enemak_Y, "orange")
-nabyt_flashbang()
-nabyt_laser()
+# Start hry
+vykresli_hrace()
 
 while True:
-    # Zpracování vstupů
-    if buttons_a.left:
-        hrac1_do_leva()
-    if buttons_a.right:
-        hrac1_do_prava()
+    pohyb_hracu()
+
     if buttons_a.enter:
-        vystrel_hrac()
+        vystrel_hrace(strely_hrac1, hrac1_X, hrac1_Y, bonusy_hrac1, "right")
+
     if buttons_b.enter:
-        flashbang()
+        vystrel_hrace(strely_hrac2, hrac2_X, hrac2_Y, bonusy_hrac2, "left")
 
-    # Náhodně střelí nepřítel (asi 1/11 šance každé kolo)
-    if random.randint(0, 10) == 1:
-        vystrel_enemak()
-
-    # Pohyb střel
-    pohyb_strel_hrace()
-    pohyb_strel_enemaka()
-
-    # Pohyb nepřítele
-    pohyb_enemaka()
-
-    # Aktualizace hráče a nepřítele na displeji (aby nezmizli)
-    display.set_pixel(hrac1_X, hrac1_Y, "green")
-    display.set_pixel(enemak_X, enemak_Y, "orange")
-
-    # Malá pauza, aby hra neběžela moc rychle
-    time.sleep_ms(50)
+    pohyb_strel()
+    spawn_powerup()
+    vykresli_powerupy()
+    zkontroluj_konec()
+    time.sleep_ms(100)
